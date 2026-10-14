@@ -1,0 +1,63 @@
+:root {
+  --primary-color: #c62828;
+  --primary-hover: #b71c1c;
+  --primary-light: #ffebee;
+  --secondary-color: #1e293b;
+  --accent-color: #e53935;
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --card-radius: 12px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+.error-text-display {
+  color: #d32f2f;
+  font-size: 0.8125rem;
+  margin-top: 4px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* Works for Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Works for Firefox */
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

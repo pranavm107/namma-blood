@@ -20,6 +20,17 @@ const protect = catchAsync(async (req, res, next) => {
 	const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET)
 
 	const currentTime = Math.floor(Date.now() / 1000) // Convert to seconds
+	if (
+		!decoded.iat ||
+		typeof decoded.iat !== 'number' ||
+		isNaN(decoded.iat) ||
+		decoded.iat <= 0
+	) {
+		return res.status(401).json({
+			message: 'Invalid token! Missing or malformed issue timestamp.',
+		})
+	}
+
 	if (currentTime > decoded.exp) {
 		return res.status(401).json({
 			message: 'Token Expired! Login to get access.',
@@ -33,7 +44,7 @@ const protect = catchAsync(async (req, res, next) => {
 		})
 	}
 
-	if (currentUser.changedPasswordAfter(decoded.iat)) {
+	if (currentUser.changedPasswordAfter(decoded.iat, decoded.tokenVersion)) {
 		return res.status(401).json({
 			message: 'User recently changed password! Please log in again.',
 		})

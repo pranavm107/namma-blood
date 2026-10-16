@@ -1,7 +1,5 @@
 const express = require('express')
 const { loginMiddleware, login } = require('../Login_And_Authentication/login')
-const { registerMiddleware } = require('./adminMiddleware')
-const { adminRegister } = require('./adminController')
 const { selectAdminModel } = require('../Common/Middlewares/selectModels')
 const { protect } = require('../Login_And_Authentication/authMiddleware')
 const {
@@ -11,8 +9,6 @@ const {
 const router = express.Router()
 
 router.use(selectAdminModel)
-
-router.route('/register').post(registerMiddleware, adminRegister)
 
 router.route('/login').post(loginMiddleware, login)
 

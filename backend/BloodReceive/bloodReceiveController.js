@@ -1,86 +1,244 @@
-const {
-	checkAvailability,
-	decreaseStock,
-} = require('../BloodStock/bloodStockController')
+const mongoose = require('mongoose')
+const bloodStockController = require('../BloodStock/bloodStockController')
 const catchAsync = require('../Utils/catchAsync')
 const ReceiveRequests = require('./bloodReceiveModel')
+const Bloodbank = require('../BloodBank/bloodbankModel')
 const AppError = require('../Utils/appError')
 
-const addRequest = catchAsync(async (req, res) => {
-	const dataFind = await ReceiveRequests.find({
-		userId: req.user._id,
-		bloodbankId: req.body.bloodbankId,
-	})
-		.sort({ whenToGive: -1 })
-		.limit(1)
+const VALID_BLOOD_TYPES = [
+	'A_Positive',
+	'A_Negative',
+	'B_Positive',
+	'B_Negative',
+	'AB_Positive',
+	'AB_Negative',
+	'O_Positive',
+	'O_Negative',
+]
 
-	if (dataFind.length !== 0) {
-		if (
-			dataFind[0].status === 'Pending' ||
-			dataFind[0].status === 'Accepted'
-		) {
-			return res.status(404).json({
-				message:
-					'You already sent request please wait for bloodbank response.',
-			})
-		}
+const addRequest = catchAsync(async (req, res, next) => {
+	const { bloodbankId, bloodType, unit, whenDoYouWant, message } = req.body
+
+	if (!bloodbankId || !mongoose.Types.ObjectId.isValid(bloodbankId)) {
+		return res.status(400).json({
+			message: 'Valid bloodbankId is required.',
+		})
 	}
 
-	Object.assign(req.body, { userId: req.user._id })
+	const bloodbankExists = await Bloodbank.findById(bloodbankId)
+	if (!bloodbankExists) {
+		return res.status(404).json({
+			message: 'Blood bank not found.',
+		})
+	}
 
-	await ReceiveRequests.create(req.body)
+	if (!bloodType || !VALID_BLOOD_TYPES.includes(bloodType)) {
+		return res.status(400).json({
+			message: `Valid bloodType is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`,
+		})
+	}
+
+	const units = Math.floor(Number(unit))
+	if (!units || units < 1 || isNaN(units)) {
+		return res.status(400).json({
+			message: 'Unit must be a positive integer of at least 1.',
+		})
+	}
+
+	if (!whenDoYouWant) {
+		return res.status(400).json({
+			message: 'whenDoYouWant date is required.',
+		})
+	}
+
+	const existingPending = await ReceiveRequests.findOne({
+		userId: req.user._id,
+		bloodbankId,
+		status: { $in: ['Pending', 'Accepted'] },
+	})
+
+	if (existingPending) {
+		return res.status(400).json({
+			message: 'You already have an active request with this blood bank. Please await their response.',
+		})
+	}
+
+	await ReceiveRequests.create({
+		userId: req.user._id,
+		bloodbankId,
+		bloodType,
+		unit: units,
+		whenDoYouWant: new Date(whenDoYouWant),
+		message: message || '',
+		status: 'Pending',
+	})
 
 	return res.status(201).json({
 		message: 'Request sent.',
 	})
 })
 
-const acceptRequest = catchAsync(async (req, res) => {
-	await ReceiveRequests.findByIdAndUpdate(
-		req.body.id,
-		{ status: 'Accepted' },
-		{ new: true }
-	)
+const acceptRequest = catchAsync(async (req, res, next) => {
+	const { id } = req.body
+
+	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+		return res.status(400).json({
+			message: 'Valid request ID is required.',
+		})
+	}
+
+	const request = await ReceiveRequests.findOne({
+		_id: id,
+		bloodbankId: req.user._id,
+	})
+
+	if (!request) {
+		return res.status(404).json({
+			message: 'Request not found.',
+		})
+	}
+
+	if (request.status !== 'Pending') {
+		return res.status(400).json({
+			message: `Cannot accept request with status '${request.status}'. Only Pending requests can be accepted.`,
+		})
+	}
+
+	request.status = 'Accepted'
+	await request.save()
 
 	return res.status(200).json({
 		message: 'Request Accepted.',
 	})
 })
 
-const rejectRequest = catchAsync(async (req, res) => {
-	await ReceiveRequests.findByIdAndUpdate(
-		req.body.id,
-		{ status: 'Rejected', message: 'Rejected by Bloodbank.' },
-		{ new: true }
-	)
+const rejectRequest = catchAsync(async (req, res, next) => {
+	const { id, message } = req.body
+
+	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+		return res.status(400).json({
+			message: 'Valid request ID is required.',
+		})
+	}
+
+	const request = await ReceiveRequests.findOne({
+		_id: id,
+		bloodbankId: req.user._id,
+	})
+
+	if (!request) {
+		return res.status(404).json({
+			message: 'Request not found.',
+		})
+	}
+
+	if (request.status === 'Fulfilled') {
+		return res.status(400).json({
+			message: 'Cannot reject an already fulfilled request.',
+		})
+	}
+
+	if (request.status === 'Rejected') {
+		return res.status(400).json({
+			message: 'Request is already rejected.',
+		})
+	}
+
+	request.status = 'Rejected'
+	request.message = message || 'Rejected by Bloodbank.'
+	await request.save()
 
 	return res.status(200).json({
 		message: 'Request Rejected.',
 	})
 })
 
-const editReceiveRequest = catchAsync(async (req, res) => {
-	await ReceiveRequests.findByIdAndUpdate(
-		req.body.id,
-		{
-			whenDoYouWant: req.body.whenDoYouWant,
-			bloodType: req.body.bloodType,
-			unit: req.body.unit,
-		},
-		{ new: true }
-	)
+const editReceiveRequest = catchAsync(async (req, res, next) => {
+	const { id, whenDoYouWant, bloodType, unit } = req.body
+
+	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+		return res.status(400).json({
+			message: 'Valid request ID is required.',
+		})
+	}
+
+	const request = await ReceiveRequests.findOne({
+		_id: id,
+		userId: req.user._id,
+	})
+
+	if (!request) {
+		return res.status(404).json({
+			message: 'Request not found.',
+		})
+	}
+
+	if (request.status !== 'Pending') {
+		return res.status(400).json({
+			message: `Cannot edit request with status '${request.status}'. Only Pending requests can be edited.`,
+		})
+	}
+
+	if (bloodType && !VALID_BLOOD_TYPES.includes(bloodType)) {
+		return res.status(400).json({
+			message: `Invalid blood type. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`,
+		})
+	}
+
+	if (unit !== undefined) {
+		const units = Math.floor(Number(unit))
+		if (!units || units < 1 || isNaN(units)) {
+			return res.status(400).json({
+				message: 'Unit must be a positive integer of at least 1.',
+			})
+		}
+		request.unit = units
+	}
+
+	if (whenDoYouWant) request.whenDoYouWant = new Date(whenDoYouWant)
+	if (bloodType) request.bloodType = bloodType
+	await request.save()
 
 	return res.status(200).json({
 		message: 'Request Edited.',
 	})
 })
 
-const rejectRequestByUser = catchAsync(async (req, res) => {
-	await ReceiveRequests.findByIdAndUpdate(
-		req.body.id,
-		{ status: 'Rejected', message: 'Rejected by User.' },
-		{ new: true }
-	)
+const rejectRequestByUser = catchAsync(async (req, res, next) => {
+	const { id, message } = req.body
+
+	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+		return res.status(400).json({
+			message: 'Valid request ID is required.',
+		})
+	}
+
+	const request = await ReceiveRequests.findOne({
+		_id: id,
+		userId: req.user._id,
+	})
+
+	if (!request) {
+		return res.status(404).json({
+			message: 'Request not found.',
+		})
+	}
+
+	if (request.status === 'Fulfilled') {
+		return res.status(400).json({
+			message: 'Cannot cancel an already fulfilled request.',
+		})
+	}
+
+	if (request.status === 'Rejected') {
+		return res.status(400).json({
+			message: 'Request is already cancelled.',
+		})
+	}
+
+	request.status = 'Rejected'
+	request.message = message || 'Cancelled by User.'
+	await request.save()
 
 	return res.status(200).json({
 		message: 'Request Rejected.',
@@ -88,33 +246,85 @@ const rejectRequestByUser = catchAsync(async (req, res) => {
 })
 
 const fulfilledRequest = catchAsync(async (req, res, next) => {
-	if (!req.body.bloodType) {
-		return next(new AppError('Provide Blood Type.', 404))
+	const { id, bloodType, unit, whenDoYouWant } = req.body
+
+	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+		return res.status(400).json({
+			message: 'Valid request ID is required.',
+		})
 	}
 
-	const isAvailable = await checkAvailability(
-		req.user._id,
-		req.body.bloodType,
-		req.body.unit
-	)
+	const request = await ReceiveRequests.findOne({
+		_id: id,
+		bloodbankId: req.user._id,
+	})
 
+	if (!request) {
+		return res.status(404).json({
+			message: 'Request not found.',
+		})
+	}
+
+	if (request.status === 'Fulfilled') {
+		return res.status(400).json({
+			message: 'Request has already been fulfilled. Stock cannot be decremented repeatedly.',
+		})
+	}
+
+	if (request.status === 'Rejected') {
+		return res.status(400).json({
+			message: 'Cannot fulfill a rejected request.',
+		})
+	}
+
+	const effectiveBloodType = bloodType || request.bloodType
+	if (!effectiveBloodType || !VALID_BLOOD_TYPES.includes(effectiveBloodType)) {
+		return res.status(400).json({
+			message: `Valid Blood Type is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`,
+		})
+	}
+
+	const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
+
+	// Verify availability first
+	const isAvailable = await bloodStockController.checkAvailability(req.user._id, effectiveBloodType, unitsToDeduct)
 	if (!isAvailable) {
-		return next(
-			new AppError('You can not give Blood unit more then you have', 404)
-		)
+		return res.status(400).json({
+			message: `Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`,
+		})
 	}
 
-	await ReceiveRequests.findByIdAndUpdate(
-		req.body.id,
+	// 1. Atomically decrement stock
+	const stockUpdated = await bloodStockController.decreaseStock(req.user._id, effectiveBloodType, unitsToDeduct)
+	if (!stockUpdated) {
+		return res.status(400).json({
+			message: `Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`,
+		})
+	}
+
+	// 2. Atomically transition request to Fulfilled
+	const updated = await ReceiveRequests.findOneAndUpdate(
+		{
+			_id: id,
+			bloodbankId: req.user._id,
+			status: { $ne: 'Fulfilled' },
+		},
 		{
 			status: 'Fulfilled',
-			whenDoYouWant: req.body.whenDoYouWant,
-			bloodType: req.body.bloodType,
+			bloodType: effectiveBloodType,
+			unit: unitsToDeduct,
+			whenDoYouWant: whenDoYouWant ? new Date(whenDoYouWant) : request.whenDoYouWant,
 		},
 		{ new: true }
 	)
 
-	await decreaseStock(req.user._id, req.body.bloodType, req.body.unit)
+	// If request transition failed (e.g. concurrent fulfillment), restore decremented stock!
+	if (!updated) {
+		await bloodStockController.increaseStock(req.user._id, effectiveBloodType, unitsToDeduct)
+		return res.status(400).json({
+			message: 'Request fulfillment conflict. Please refresh and retry.',
+		})
+	}
 
 	return res.status(200).json({
 		message: 'Request Fulfilled.',
@@ -260,11 +470,39 @@ const getBloodbankStates = catchAsync(async (req, res, next) => {
 })
 
 const getBloodbankDataQuery = catchAsync(async (req, res, next) => {
-	const query = req.query
+	for (const key of Object.keys(req.query)) {
+		if (key.startsWith('$') || key.includes('.')) {
+			return res.status(400).json({
+				message: `Forbidden query operator or key: '${key}'.`,
+			})
+		}
+		const value = req.query[key]
+		if (typeof value === 'object' && value !== null) {
+			return res.status(400).json({
+				message: `Invalid query parameter for '${key}'. Nested query objects are not allowed.`,
+			})
+		}
+	}
 
-	const data = await ReceiveRequests.find({ bloodbankId: req.user._id })
-		.find(query)
-		.populate({ path: 'userId' })
+	const filter = { bloodbankId: req.user._id }
+
+	if (
+		req.query.status &&
+		['Pending', 'Accepted', 'Rejected', 'Fulfilled'].includes(req.query.status)
+	) {
+		filter.status = req.query.status
+	}
+	if (req.query.bloodType && VALID_BLOOD_TYPES.includes(req.query.bloodType)) {
+		filter.bloodType = req.query.bloodType
+	}
+
+	const data = await ReceiveRequests.find(filter)
+		.populate({
+			path: 'userId',
+			select:
+				'firstName lastName gender dob age phoneNo1 phoneNo2 email state city address pinCode',
+		})
+		.sort({ createdAt: -1 })
 
 	return res.status(200).json(data)
 })

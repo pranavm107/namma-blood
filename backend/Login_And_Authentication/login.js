@@ -6,9 +6,13 @@ const {
 	passwordLengthValidate,
 } = require('../Common/Functions/validateInputs')
 
-const tokenGenerate = (id) => {
-	return jwt.sign({ id }, process.env.JWT_SECRET, {
-		expiresIn: process.env.JWT_EXPIRES_IN,
+const tokenGenerate = (id, tokenVersion = 0) => {
+	const payload = {
+		id,
+		tokenVersion: typeof tokenVersion === 'number' ? tokenVersion : 0,
+	}
+	return jwt.sign(payload, process.env.JWT_SECRET, {
+		expiresIn: process.env.JWT_EXPIRES_IN || '1h',
 	})
 }
 
@@ -54,7 +58,7 @@ const login = catchAsync(async (req, res) => {
 	}
 	user.password = undefined
 
-	const token = tokenGenerate(user._id)
+	const token = tokenGenerate(user._id, user.tokenVersion)
 
 	return res.status(200).json({
 		message: 'Login Successfully.',

@@ -24,17 +24,19 @@ Namma Blood Community Team`
 	})
 }
 
-const registerBloodbankEmail = async (bloodbankName, email, password) => {
+const registerBloodbankEmail = async (bloodbankName, email) => {
 	const message = `Dear ${bloodbankName} Team,
 
 Welcome to Namma Blood — Blood Donation Platform.
-Your accredited blood bank has been successfully onboarded to our network.
+Your accredited blood bank has been successfully onboarded to our network by the platform administrator.
 
-Your login credentials:
+Your login identifier:
 Email: ${email}
-Password: ${password}
 
 Access your Blood Bank Portal here:
+http://localhost:3000/login/bloodbank
+
+For security, your account was configured during administrator registration. You can sign in using your established credentials, or use the Forgot Password link to configure a new password:
 http://localhost:3000/login/bloodbank
 
 Warm regards,

@@ -11,18 +11,11 @@ const getStock = catchAsync(async (req, res) => {
 	return res.status(200).json(bloodStock)
 })
 
-const checkAvailability = async (bloodbankId, bloodType, unit) => {
+const checkAvailability = async (bloodbankId, bloodType, unit = 1) => {
+	const validUnits = Math.max(1, Number(unit) || 1)
 	const bloodstock = await Bloodstock.findOne({ bloodbankId })
-
-	for (const key in bloodstock) {
-		if (key === bloodType) {
-			if (bloodstock[key] < unit) {
-				return false
-			}
-		}
-	}
-
-	return true
+	if (!bloodstock) return false
+	return (bloodstock[bloodType] || 0) >= validUnits
 }
 
 const updatStock = catchAsync(async (req, res) => {
@@ -30,15 +23,33 @@ const updatStock = catchAsync(async (req, res) => {
 		bloodbankId: req.user._id,
 	})
 
-	const body = req.body
+	if (!currentStock) {
+		return res.status(404).json({
+			message: 'Stock not found for this bloodbank.',
+		})
+	}
 
-	for (const key in currentStock) {
-		if (Object.keys(body).includes(key)) {
-			if (currentStock[key] + Number(body[key]) >= 0) {
-				currentStock[key] = currentStock[key] + Number(body[key])
+	const body = req.body
+	const allowedKeys = [
+		'A_Positive',
+		'A_Negative',
+		'B_Positive',
+		'B_Negative',
+		'AB_Positive',
+		'AB_Negative',
+		'O_Positive',
+		'O_Negative',
+	]
+
+	for (const key of allowedKeys) {
+		if (body[key] !== undefined) {
+			const delta = Number(body[key])
+			if (isNaN(delta)) continue
+			if (currentStock[key] + delta >= 0) {
+				currentStock[key] = currentStock[key] + delta
 			} else {
-				return res.status(404).json({
-					message: 'You can not decrease stock more than you have.',
+				return res.status(400).json({
+					message: `Cannot decrease stock for ${key} below zero.`,
 				})
 			}
 		}
@@ -51,30 +62,24 @@ const updatStock = catchAsync(async (req, res) => {
 	})
 })
 
-const increaseStock = async (bloodbankId, bloodType) => {
-	const currentStock = await Bloodstock.findOne({
-		bloodbankId,
-	})
-
-	for (const key in currentStock) {
-		if (bloodType === key) {
-			currentStock[key] = currentStock[key] + 1
-		}
-	}
-
-	await currentStock.save()
+const increaseStock = async (bloodbankId, bloodType, unit = 1) => {
+	const validUnits = Math.max(1, Number(unit) || 1)
+	const updated = await Bloodstock.findOneAndUpdate(
+		{ bloodbankId },
+		{ $inc: { [bloodType]: validUnits } },
+		{ upsert: true, new: true }
+	)
+	return updated
 }
 
-const decreaseStock = async (bloodbankId, bloodType, unit) => {
-	const bloodstock = await Bloodstock.findOne({ bloodbankId })
-
-	for (const key in bloodstock) {
-		if (key === bloodType) {
-			bloodstock[key] = bloodstock[key] - unit
-		}
-	}
-
-	await bloodstock.save()
+const decreaseStock = async (bloodbankId, bloodType, unit = 1) => {
+	const validUnits = Math.max(1, Number(unit) || 1)
+	const updated = await Bloodstock.findOneAndUpdate(
+		{ bloodbankId, [bloodType]: { $gte: validUnits } },
+		{ $inc: { [bloodType]: -validUnits } },
+		{ new: true }
+	)
+	return updated
 }
 
 module.exports = {

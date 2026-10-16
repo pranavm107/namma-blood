@@ -78,6 +78,10 @@ const schema = new mongoose.Schema(
 		passwordChangedAt: Date,
 		passwordResetToken: String,
 		passwordResetExpires: Date,
+		tokenVersion: {
+			type: Number,
+			default: 0,
+		},
 	},
 	{ timestamps: true }
 )
@@ -87,8 +91,13 @@ schema.pre('save', async function (next) {
 
 	this.password = await bcryptjs.hash(
 		this.password,
-		Number(process.env.PASSWORD_ENCRYPT_LEVEL)
+		Number(process.env.PASSWORD_ENCRYPT_LEVEL || 12)
 	)
+
+	if (!this.isNew) {
+		this.passwordChangedAt = Date.now()
+		this.tokenVersion = (this.tokenVersion || 0) + 1
+	}
 
 	next()
 })
@@ -100,13 +109,24 @@ schema.methods.correctPassword = async function (
 	return await bcryptjs.compare(candidatePassword, userPassword)
 }
 
-schema.methods.changedPasswordAfter = function (JWTTimestamp) {
+schema.methods.changedPasswordAfter = function (JWTTimestamp, tokenVersion) {
+	// Reject missing, non-numeric, NaN, or non-positive iat claims unconditionally
+	if (!JWTTimestamp || typeof JWTTimestamp !== 'number' || isNaN(JWTTimestamp) || JWTTimestamp <= 0) {
+		return true
+	}
+
+	// 1) If token contains tokenVersion, use strict version validation
+	if (typeof tokenVersion === 'number' && typeof this.tokenVersion === 'number') {
+		return tokenVersion < this.tokenVersion
+	}
+
+	// 2) Fallback to timestamp comparison for legacy tokens without tokenVersion
 	if (this.passwordChangedAt) {
 		const changedTimestamp = parseInt(
 			this.passwordChangedAt.getTime() / 1000,
 			10
 		)
-		return JWTTimestamp < changedTimestamp
+		return JWTTimestamp <= changedTimestamp
 	}
 
 	return false
@@ -116,7 +136,7 @@ schema.methods.createPasswordResetToken = function () {
 	const resetToken = crypto.randomBytes(32).toString('hex')
 
 	this.passwordResetToken = crypto
-		.createHash(process.env.CREATEHASH_KEY)
+		.createHash(process.env.CREATEHASH_KEY || 'sha256')
 		.update(resetToken)
 		.digest('hex')
 

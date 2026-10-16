@@ -10,7 +10,7 @@ const schema = new mongoose.Schema(
 		bloodbankId: {
 			type: mongoose.Types.ObjectId,
 			ref: 'bloodbank',
-			reauired: [true, 'Bloodbank Id is required'],
+			required: [true, 'Bloodbank Id is required'],
 		},
 		bloodType: {
 			type: String,

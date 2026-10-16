@@ -9,6 +9,7 @@ import InfoIcon from '@mui/icons-material/Info'
 import ContactsIcon from '@mui/icons-material/Contacts'
 import HomeIcon from '@mui/icons-material/Home'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { useDispatch, useSelector } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import LogoutIcon from '@mui/icons-material/Logout'
@@ -78,6 +79,10 @@ const MainListItems = () => {
 
 	const bloodbankListHandler = () => {
 		navigate('/admin/bloodbanks')
+	}
+
+	const bulkImportHandler = () => {
+		navigate('/admin/bulk-import')
 	}
 
 	const logoutHandler = async () => {
@@ -289,6 +294,15 @@ const MainListItems = () => {
 							<BloodtypeIcon />
 						</ListItemIcon>
 						<ListItemText primary='Bloodbanks' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={bulkImportHandler}
+						selected={url[1] === 'admin' && url[2] === 'bulk-import'}
+					>
+						<ListItemIcon>
+							<UploadFileIcon />
+						</ListItemIcon>
+						<ListItemText primary='Bulk Import' />
 					</ListItemButton>
 					<ListItemButton
 						onClick={aboutusHandler}

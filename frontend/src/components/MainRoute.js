@@ -23,6 +23,7 @@ import ReceiveRequestStatesB from './BloodBank/ReceiveRequestStatesB'
 import AdminHome from './Admin/AdminHome'
 import BloodbankList from './Admin/BloodbankList'
 import AddBloodbank from './Admin/AddBloodbank'
+import BulkImport from './Admin/BulkImport'
 import ForgotPassword from './Auth/ForgotPassword'
 import ResetPassword from './Auth/ResetPassword'
 
@@ -139,6 +140,10 @@ const MainRoute = () => {
 										<Route
 											path='addbloodbank'
 											element={<AddBloodbank />}
+										/>
+										<Route
+											path='bulk-import'
+											element={<BulkImport />}
 										/>
 										<Route
 											path='aboutus'

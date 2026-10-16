@@ -245,6 +245,8 @@ const rejectRequestByUser = catchAsync(async (req, res, next) => {
 	})
 })
 
+const { withTransaction } = require('../Utils/transactionHelper')
+
 const fulfilledRequest = catchAsync(async (req, res, next) => {
 	const { id, bloodType, unit, whenDoYouWant } = req.body
 
@@ -254,80 +256,116 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
-	const request = await ReceiveRequests.findOne({
-		_id: id,
-		bloodbankId: req.user._id,
-	})
+	return await withTransaction(async (session) => {
+		const opts = session ? { session } : {}
 
-	if (!request) {
-		return res.status(404).json({
-			message: 'Request not found.',
+		const request = await ReceiveRequests.findOne(
+			{
+				_id: id,
+				bloodbankId: req.user._id,
+			},
+			null,
+			opts
+		)
+
+		if (!request) {
+			const err = new Error('Request not found.')
+			err.statusCode = 404
+			throw err
+		}
+
+		if (request.status === 'Fulfilled') {
+			const err = new Error(
+				'Request has already been fulfilled. Stock cannot be decremented repeatedly.'
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		if (request.status === 'Rejected') {
+			const err = new Error('Cannot fulfill a rejected request.')
+			err.statusCode = 400
+			throw err
+		}
+
+		const effectiveBloodType = bloodType || request.bloodType
+		if (!effectiveBloodType || !VALID_BLOOD_TYPES.includes(effectiveBloodType)) {
+			const err = new Error(
+				`Valid Blood Type is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
+
+		// Verify availability first
+		const isAvailable = await bloodStockController.checkAvailability(
+			req.user._id,
+			effectiveBloodType,
+			unitsToDeduct,
+			opts
+		)
+		if (!isAvailable) {
+			const err = new Error(
+				`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		// 1. Atomically decrement stock
+		const stockUpdated = await bloodStockController.decreaseStock(
+			req.user._id,
+			effectiveBloodType,
+			unitsToDeduct,
+			opts
+		)
+		if (!stockUpdated) {
+			const err = new Error(
+				`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		// 2. Atomically transition request to Fulfilled
+		const updated = await ReceiveRequests.findOneAndUpdate(
+			{
+				_id: id,
+				bloodbankId: req.user._id,
+				status: { $ne: 'Fulfilled' },
+			},
+			{
+				status: 'Fulfilled',
+				bloodType: effectiveBloodType,
+				unit: unitsToDeduct,
+				whenDoYouWant: whenDoYouWant ? new Date(whenDoYouWant) : request.whenDoYouWant,
+			},
+			{ new: true, ...opts }
+		)
+
+		// If request transition failed (e.g. concurrent fulfillment), restore decremented stock!
+		if (!updated) {
+			if (!session) {
+				await bloodStockController.increaseStock(
+					req.user._id,
+					effectiveBloodType,
+					unitsToDeduct
+				)
+			}
+			const err = new Error('Request fulfillment conflict. Please refresh and retry.')
+			err.statusCode = 400
+			throw err
+		}
+
+		return res.status(200).json({
+			message: 'Request Fulfilled.',
 		})
-	}
-
-	if (request.status === 'Fulfilled') {
-		return res.status(400).json({
-			message: 'Request has already been fulfilled. Stock cannot be decremented repeatedly.',
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
 		})
-	}
-
-	if (request.status === 'Rejected') {
-		return res.status(400).json({
-			message: 'Cannot fulfill a rejected request.',
-		})
-	}
-
-	const effectiveBloodType = bloodType || request.bloodType
-	if (!effectiveBloodType || !VALID_BLOOD_TYPES.includes(effectiveBloodType)) {
-		return res.status(400).json({
-			message: `Valid Blood Type is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`,
-		})
-	}
-
-	const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
-
-	// Verify availability first
-	const isAvailable = await bloodStockController.checkAvailability(req.user._id, effectiveBloodType, unitsToDeduct)
-	if (!isAvailable) {
-		return res.status(400).json({
-			message: `Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`,
-		})
-	}
-
-	// 1. Atomically decrement stock
-	const stockUpdated = await bloodStockController.decreaseStock(req.user._id, effectiveBloodType, unitsToDeduct)
-	if (!stockUpdated) {
-		return res.status(400).json({
-			message: `Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`,
-		})
-	}
-
-	// 2. Atomically transition request to Fulfilled
-	const updated = await ReceiveRequests.findOneAndUpdate(
-		{
-			_id: id,
-			bloodbankId: req.user._id,
-			status: { $ne: 'Fulfilled' },
-		},
-		{
-			status: 'Fulfilled',
-			bloodType: effectiveBloodType,
-			unit: unitsToDeduct,
-			whenDoYouWant: whenDoYouWant ? new Date(whenDoYouWant) : request.whenDoYouWant,
-		},
-		{ new: true }
-	)
-
-	// If request transition failed (e.g. concurrent fulfillment), restore decremented stock!
-	if (!updated) {
-		await bloodStockController.increaseStock(req.user._id, effectiveBloodType, unitsToDeduct)
-		return res.status(400).json({
-			message: 'Request fulfillment conflict. Please refresh and retry.',
-		})
-	}
-
-	return res.status(200).json({
-		message: 'Request Fulfilled.',
 	})
 })
 

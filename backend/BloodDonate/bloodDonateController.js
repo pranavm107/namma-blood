@@ -253,6 +253,8 @@ const rejectRequestByUser = catchAsync(async (req, res, next) => {
 	})
 })
 
+const { withTransaction } = require('../Utils/transactionHelper')
+
 const fulfilledRequest = catchAsync(async (req, res, next) => {
 	const { id, bloodType, whenToGive } = req.body
 
@@ -262,67 +264,85 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
-	const request = await DonateRequests.findOne({
-		_id: id,
-		bloodbankId: req.user._id,
-	})
+	return await withTransaction(async (session) => {
+		const opts = session ? { session } : {}
 
-	if (!request) {
-		return res.status(404).json({
-			message: 'Request not found.',
+		const request = await DonateRequests.findOne(
+			{
+				_id: id,
+				bloodbankId: req.user._id,
+			},
+			null,
+			opts
+		)
+
+		if (!request) {
+			const err = new Error('Request not found.')
+			err.statusCode = 404
+			throw err
+		}
+
+		if (request.status === 'Fulfilled') {
+			const err = new Error(
+				'Request has already been fulfilled. Stock cannot be incremented repeatedly.'
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		if (request.status === 'Rejected') {
+			const err = new Error('Cannot fulfill a rejected request.')
+			err.statusCode = 400
+			throw err
+		}
+
+		const effectiveBloodType = bloodType || request.bloodType
+		if (!effectiveBloodType || !VALID_BLOOD_TYPES.includes(effectiveBloodType)) {
+			const err = new Error(
+				`Valid Blood Type is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`
+			)
+			err.statusCode = 400
+			throw err
+		}
+
+		const updated = await DonateRequests.findOneAndUpdate(
+			{
+				_id: id,
+				bloodbankId: req.user._id,
+				status: { $ne: 'Fulfilled' },
+			},
+			{
+				status: 'Fulfilled',
+				bloodType: effectiveBloodType,
+				whenToGive: whenToGive ? new Date(whenToGive) : request.whenToGive || new Date(),
+			},
+			{ new: true, ...opts }
+		)
+
+		if (!updated) {
+			const err = new Error('Request fulfillment conflict. Please refresh and retry.')
+			err.statusCode = 400
+			throw err
+		}
+
+		try {
+			await bloodStockController.increaseStock(req.user._id, effectiveBloodType, 1, opts)
+		} catch (stockErr) {
+			if (!session) {
+				await DonateRequests.findByIdAndUpdate(id, { status: request.status })
+			}
+			const err = new Error('Failed to update blood stock. Transaction rolled back.')
+			err.statusCode = 500
+			throw err
+		}
+
+		return res.status(200).json({
+			message: 'Request Fulfilled.',
 		})
-	}
-
-	if (request.status === 'Fulfilled') {
-		return res.status(400).json({
-			message: 'Request has already been fulfilled. Stock cannot be incremented repeatedly.',
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
 		})
-	}
-
-	if (request.status === 'Rejected') {
-		return res.status(400).json({
-			message: 'Cannot fulfill a rejected request.',
-		})
-	}
-
-	const effectiveBloodType = bloodType || request.bloodType
-	if (!effectiveBloodType || !VALID_BLOOD_TYPES.includes(effectiveBloodType)) {
-		return res.status(400).json({
-			message: `Valid Blood Type is required. Allowed types: ${VALID_BLOOD_TYPES.join(', ')}`,
-		})
-	}
-
-	const updated = await DonateRequests.findOneAndUpdate(
-		{
-			_id: id,
-			bloodbankId: req.user._id,
-			status: { $ne: 'Fulfilled' },
-		},
-		{
-			status: 'Fulfilled',
-			bloodType: effectiveBloodType,
-			whenToGive: whenToGive ? new Date(whenToGive) : request.whenToGive || new Date(),
-		},
-		{ new: true }
-	)
-
-	if (!updated) {
-		return res.status(400).json({
-			message: 'Request fulfillment conflict. Please refresh and retry.',
-		})
-	}
-
-	try {
-		await bloodStockController.increaseStock(req.user._id, effectiveBloodType, 1)
-	} catch (stockErr) {
-		await DonateRequests.findByIdAndUpdate(id, { status: request.status })
-		return res.status(500).json({
-			message: 'Failed to update blood stock. Transaction rolled back.',
-		})
-	}
-
-	return res.status(200).json({
-		message: 'Request Fulfilled.',
 	})
 })
 

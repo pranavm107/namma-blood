@@ -11,9 +11,9 @@ const getStock = catchAsync(async (req, res) => {
 	return res.status(200).json(bloodStock)
 })
 
-const checkAvailability = async (bloodbankId, bloodType, unit = 1) => {
+const checkAvailability = async (bloodbankId, bloodType, unit = 1, options = {}) => {
 	const validUnits = Math.max(1, Number(unit) || 1)
-	const bloodstock = await Bloodstock.findOne({ bloodbankId })
+	const bloodstock = await Bloodstock.findOne({ bloodbankId }, null, options)
 	if (!bloodstock) return false
 	return (bloodstock[bloodType] || 0) >= validUnits
 }
@@ -62,22 +62,22 @@ const updatStock = catchAsync(async (req, res) => {
 	})
 })
 
-const increaseStock = async (bloodbankId, bloodType, unit = 1) => {
+const increaseStock = async (bloodbankId, bloodType, unit = 1, options = {}) => {
 	const validUnits = Math.max(1, Number(unit) || 1)
 	const updated = await Bloodstock.findOneAndUpdate(
 		{ bloodbankId },
 		{ $inc: { [bloodType]: validUnits } },
-		{ upsert: true, new: true }
+		{ upsert: true, new: true, ...options }
 	)
 	return updated
 }
 
-const decreaseStock = async (bloodbankId, bloodType, unit = 1) => {
+const decreaseStock = async (bloodbankId, bloodType, unit = 1, options = {}) => {
 	const validUnits = Math.max(1, Number(unit) || 1)
 	const updated = await Bloodstock.findOneAndUpdate(
 		{ bloodbankId, [bloodType]: { $gte: validUnits } },
 		{ $inc: { [bloodType]: -validUnits } },
-		{ new: true }
+		{ new: true, ...options }
 	)
 	return updated
 }

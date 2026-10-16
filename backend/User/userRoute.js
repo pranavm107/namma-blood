@@ -21,22 +21,18 @@ const {
 
 router.use(selectUserModel)
 
+// Public endpoints
 router.route('/register').post(registerMiddleware, registerUser)
-
 router.route('/login').post(loginMiddleware, login)
-
 router.route('/forgotpassword').post(forgotPassword)
-
 router.route('/resetpassword/:token').patch(resetPassword)
 
-router.route('/getuserbyid/:id').get(getUserById)
-
+// Protected user endpoints
 router.use(protect)
 
 router.route('/getuserprofile').get(getUserProfile)
-
+router.route('/getuserbyid/:id').get(getUserById)
 router.route('/updatepassword').patch(updatePasswordMiddleware, updatePassword)
-
 router.route('/updateuser').patch(updateUser)
 
 module.exports = router

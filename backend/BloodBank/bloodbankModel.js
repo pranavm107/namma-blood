@@ -21,7 +21,7 @@ const schema = new mongoose.Schema(
 		},
 		category: {
 			type: String,
-			enum: ['Government', 'RedCross', 'Private'],
+			enum: ['Government', 'RedCross', 'Private', 'Charitable'],
 			required: [true, 'Category is required'],
 			trim: true,
 		},

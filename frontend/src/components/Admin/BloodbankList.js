@@ -14,6 +14,7 @@ import React, { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import PlusIcon from '@heroicons/react/24/solid/PlusIcon'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { getBloodbanks } from '../../store/bloodbankSlice'
 
 const BloodbankList = () => {
@@ -36,29 +37,51 @@ const BloodbankList = () => {
 						Accredited blood banks registered on Namma Blood
 					</Typography>
 				</Box>
-				<Button
-					startIcon={
-						<SvgIcon fontSize='small'>
-							<PlusIcon />
-						</SvgIcon>
-					}
-					variant='contained'
-					onClick={() => navigate('/admin/addbloodbank')}
-					sx={{
-						backgroundColor: '#c62828',
-						fontWeight: 700,
-						textTransform: 'none',
-						py: 1,
-						px: 2.5,
-						borderRadius: 2,
-						boxShadow: '0 4px 12px rgba(198, 40, 40, 0.3)',
-						'&:hover': {
-							backgroundColor: '#b71c1c',
-						},
-					}}
-				>
-					Add Blood Bank
-				</Button>
+				<Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+					<Button
+						startIcon={<UploadFileIcon />}
+						variant='outlined'
+						onClick={() => navigate('/admin/bulk-import')}
+						sx={{
+							borderColor: '#cbd5e1',
+							color: '#334155',
+							fontWeight: 700,
+							textTransform: 'none',
+							py: 1,
+							px: 2,
+							borderRadius: 2,
+							'&:hover': {
+								borderColor: '#94a3b8',
+								backgroundColor: '#f8fafc',
+							},
+						}}
+					>
+						Bulk Import CSV
+					</Button>
+					<Button
+						startIcon={
+							<SvgIcon fontSize='small'>
+								<PlusIcon />
+							</SvgIcon>
+						}
+						variant='contained'
+						onClick={() => navigate('/admin/addbloodbank')}
+						sx={{
+							backgroundColor: '#c62828',
+							fontWeight: 700,
+							textTransform: 'none',
+							py: 1,
+							px: 2.5,
+							borderRadius: 2,
+							boxShadow: '0 4px 12px rgba(198, 40, 40, 0.3)',
+							'&:hover': {
+								backgroundColor: '#b71c1c',
+							},
+						}}
+					>
+						Add Blood Bank
+					</Button>
+				</Box>
 			</Box>
 
 			<Box

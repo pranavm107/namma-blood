@@ -8,6 +8,7 @@ const categories = [
 	{ id: 1, name: 'Government' },
 	{ id: 2, name: 'RedCross' },
 	{ id: 3, name: 'Private' },
+	{ id: 4, name: 'Charitable' },
 ]
 
 const BloodbankCategoryDropdown = ({

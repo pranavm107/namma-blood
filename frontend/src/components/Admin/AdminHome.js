@@ -15,6 +15,7 @@ import LocalHospitalIcon from '@mui/icons-material/LocalHospital'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import SecurityIcon from '@mui/icons-material/Security'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 
 const AdminHome = () => {
 	const navigate = useNavigate()
@@ -54,7 +55,7 @@ const AdminHome = () => {
 			</Paper>
 
 			<Grid container spacing={3}>
-				<Grid item xs={12} md={6}>
+				<Grid item xs={12} md={4}>
 					<Card
 						elevation={0}
 						sx={{
@@ -107,13 +108,13 @@ const AdminHome = () => {
 									},
 								}}
 							>
-								View Blood Bank Directory
+								View Directory
 							</Button>
 						</Box>
 					</Card>
 				</Grid>
 
-				<Grid item xs={12} md={6}>
+				<Grid item xs={12} md={4}>
 					<Card
 						elevation={0}
 						sx={{
@@ -144,10 +145,10 @@ const AdminHome = () => {
 								<AddCircleOutlineIcon />
 							</Box>
 							<Typography variant='h6' sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
-								Onboard New Blood Bank
+								Onboard Blood Bank
 							</Typography>
 							<Typography variant='body2' sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
-								Register a certified regional blood bank, setup authentication credentials, and link state/city coverage.
+								Register a single blood bank facility with interactive form fields and login setup.
 							</Typography>
 						</CardContent>
 						<Box sx={{ p: 2, pt: 0 }}>
@@ -167,7 +168,67 @@ const AdminHome = () => {
 									},
 								}}
 							>
-								Register New Blood Bank
+								Register Single Bank
+							</Button>
+						</Box>
+					</Card>
+				</Grid>
+
+				<Grid item xs={12} md={4}>
+					<Card
+						elevation={0}
+						sx={{
+							p: 2,
+							borderRadius: 3,
+							border: '1px solid #e2e8f0',
+							boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent>
+							<Box
+								sx={{
+									width: 48,
+									height: 48,
+									borderRadius: 2,
+									backgroundColor: '#f0fdf4',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									mb: 2,
+									color: '#15803d',
+								}}
+							>
+								<UploadFileIcon />
+							</Box>
+							<Typography variant='h6' sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+								Bulk Import CSV
+							</Typography>
+							<Typography variant='body2' sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
+								Batch-import partner blood banks, cities, and states via spreadsheet with validation preview.
+							</Typography>
+						</CardContent>
+						<Box sx={{ p: 2, pt: 0 }}>
+							<Button
+								variant='contained'
+								fullWidth
+								onClick={() => navigate('/admin/bulk-import')}
+								sx={{
+									backgroundColor: '#15803d',
+									fontWeight: 700,
+									textTransform: 'none',
+									py: 1.2,
+									borderRadius: 2,
+									boxShadow: '0 4px 12px rgba(21, 128, 61, 0.3)',
+									'&:hover': {
+										backgroundColor: '#166534',
+									},
+								}}
+							>
+								Open Bulk Import
 							</Button>
 						</Box>
 					</Card>

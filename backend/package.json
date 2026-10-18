@@ -6,7 +6,8 @@
     "scripts": {
         "test": "node --test tests/",
         "start": "nodemon index.js",
-        "seed:admin": "node scripts/bootstrapAdmin.js"
+        "seed:admin": "node scripts/bootstrapAdmin.js",
+        "seed:tn": "node scripts/seedTamilNadu.js"
     },
     "keywords": [
         "namma-blood",
@@ -22,6 +23,7 @@
         "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",
         "crypto": "^1.0.1",
+        "csv-parse": "^7.0.3",
         "dotenv": "^16.0.3",
         "express": "^4.18.2",
         "jsonwebtoken": "^9.0.0",

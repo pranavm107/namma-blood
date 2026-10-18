@@ -50,11 +50,12 @@ const BloodbankList = () => {
 	}
 
 	const validateInput = () => {
-		if (unit === 0) {
-			toast.error('Enter how many unit you want.')
+		const parsedUnit = Number(unit)
+		if (!unit || isNaN(parsedUnit) || parsedUnit < 1) {
+			toast.error('Enter a valid unit count (at least 1).')
 			return false
 		}
-		if (!bloodType) {
+		if (!bloodType || bloodType === '0') {
 			toast.error('Select Blood type.')
 			return false
 		}

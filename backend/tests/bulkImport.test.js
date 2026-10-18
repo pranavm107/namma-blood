@@ -18,6 +18,7 @@ const jwt = require('jsonwebtoken')
 const {
 	getTemplateCsv,
 	getSampleCsv,
+	getDocumentation,
 	escapeCsvValue,
 } = require('../BulkImport/bulkImportTemplates')
 const {
@@ -105,6 +106,13 @@ describe('Phase 2 — Bulk-Import Templates and Validation', () => {
 			assert.strictEqual(escapeCsvValue('Hello, World'), '"Hello, World"')
 			assert.strictEqual(escapeCsvValue('Quote "Test"'), '"Quote ""Test"""')
 			assert.strictEqual(escapeCsvValue('Multi\nLine'), '"Multi\nLine"')
+		})
+
+		it('should include Charitable in category documentation and sample data', () => {
+			const doc = getDocumentation('bloodbank')
+			assert.ok(doc.fields.category.includes('Charitable'))
+			const sampleCsv = getSampleCsv('bloodbank')
+			assert.ok(sampleCsv.includes('Charitable'))
 		})
 	})
 
@@ -386,6 +394,91 @@ describe('Phase 2 — Bulk-Import Templates and Validation', () => {
 				assert.ok(result.errors.some((e) => e.field === 'email'))
 				assert.ok(result.errors.some((e) => e.field === 'password'))
 				assert.ok(result.errors.some((e) => e.field === 'openingDate'))
+			} finally {
+				State.find = origStateFind
+				City.find = origCityFind
+				BloodBank.find = origBankFind
+			}
+		})
+
+		it('should accept Charitable as a valid category and allow import', async () => {
+			const origStateFind = State.find
+			const origCityFind = City.find
+			const origBankFind = BloodBank.find
+
+			State.find = () => ({ select: () => ({ lean: async () => [{ stateName: 'Tamil Nadu' }] }) })
+			City.find = () => ({ select: () => ({ lean: async () => [{ cityName: 'Chennai', stateName: 'Tamil Nadu' }] }) })
+			BloodBank.find = () => ({ select: () => ({ lean: async () => [] }) })
+
+			try {
+				const records = [
+					{
+						bloodbankName: 'Anna Nagar Voluntary Blood Bank',
+						category: 'Charitable',
+						contactPerson: 'Ramesh Kumar',
+						address1: '12, 2nd Avenue',
+						address2: 'Anna Nagar',
+						state: 'Tamil Nadu',
+						city: 'Chennai',
+						pinCode: '600040',
+						phoneNo1: '9840012301',
+						phoneNo2: '9840012302',
+						email: 'annanagar.bb@example.com',
+						password: 'Blood@1001',
+						openingDate: '2012-03-15',
+					},
+				]
+
+				const result = await validateBulkData('bloodbank', records)
+				assert.strictEqual(result.canImport, true)
+				assert.strictEqual(result.validRowsCount, 1)
+				assert.strictEqual(result.invalidRowsCount, 0)
+				assert.strictEqual(result.errors.length, 0)
+				assert.strictEqual(result.preview[0].data.category, 'Charitable')
+			} finally {
+				State.find = origStateFind
+				City.find = origCityFind
+				BloodBank.find = origBankFind
+			}
+		})
+
+		it('should provide actionable error messages when state or city references are missing', async () => {
+			const origStateFind = State.find
+			const origCityFind = City.find
+			const origBankFind = BloodBank.find
+
+			State.find = () => ({ select: () => ({ lean: async () => [] }) })
+			City.find = () => ({ select: () => ({ lean: async () => [] }) })
+			BloodBank.find = () => ({ select: () => ({ lean: async () => [] }) })
+
+			try {
+				const records = [
+					{
+						bloodbankName: 'Test Bank',
+						category: 'Government',
+						contactPerson: 'Dr. Test',
+						address1: '123 Main St',
+						address2: 'Ward 1',
+						state: 'Tamil Nadu',
+						city: 'Madurai',
+						pinCode: '625001',
+						phoneNo1: '9876543210',
+						phoneNo2: '9876543211',
+						email: 'test@example.com',
+						password: 'ValidPassword1',
+						openingDate: '2020-01-01',
+					},
+				]
+
+				const result = await validateBulkData('bloodbank', records)
+				assert.strictEqual(result.canImport, false)
+				const stateError = result.errors.find((e) => e.field === 'state')
+				assert.ok(stateError)
+				assert.ok(stateError.message.includes('via States tab or POST /api/state'))
+
+				const cityError = result.errors.find((e) => e.field === 'city')
+				assert.ok(cityError)
+				assert.ok(cityError.message.includes('via Cities tab or POST /api/city'))
 			} finally {
 				State.find = origStateFind
 				City.find = origCityFind

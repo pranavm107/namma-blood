@@ -332,7 +332,7 @@ async function validateCityRows(records, errors, sanitizedRows, options = {}) {
 				const stateRefErr = {
 					row: item.rowNumber,
 					field: 'stateName',
-					message: `Referenced state '${item.parsedData.stateName}' does not exist in the database.`,
+					message: `Referenced state '${item.parsedData.stateName}' does not exist in the database. Please create state '${item.parsedData.stateName}' (via States tab or POST /api/state) before importing cities for it.`,
 				}
 				item.rowErrors.push(stateRefErr)
 				item.isValid = false
@@ -438,11 +438,11 @@ async function validateBloodbankRows(
 				field: 'category',
 				message: 'Category is required.',
 			})
-		} else if (!['Government', 'RedCross', 'Private'].includes(category)) {
+		} else if (!['Government', 'RedCross', 'Private', 'Charitable'].includes(category)) {
 			rowErrors.push({
 				row: rowNum,
 				field: 'category',
-				message: `Invalid category '${category}'. Allowed values: Government, RedCross, Private.`,
+				message: `Invalid category '${category}'. Allowed values: Government, RedCross, Private, Charitable.`,
 			})
 		}
 
@@ -687,7 +687,7 @@ async function validateBloodbankRows(
 				const stateErr = {
 					row: item.rowNumber,
 					field: 'state',
-					message: `State '${item.parsedData.state}' does not exist in the system.`,
+					message: `State '${item.parsedData.state}' does not exist in the database. Please create state '${item.parsedData.state}' (via States tab or POST /api/state) before importing blood banks for this region.`,
 				}
 				item.rowErrors.push(stateErr)
 				item.isValid = false
@@ -724,7 +724,7 @@ async function validateBloodbankRows(
 					const cityErr = {
 						row: item.rowNumber,
 						field: 'city',
-						message: `City '${item.parsedData.city}' is not registered under State '${item.parsedData.state}'.`,
+						message: `City '${item.parsedData.city}' is not registered under State '${item.parsedData.state}' in the database. Please create city '${item.parsedData.city}' under '${item.parsedData.state}' (via Cities tab or POST /api/city) before importing.`,
 					}
 					item.rowErrors.push(cityErr)
 					item.isValid = false

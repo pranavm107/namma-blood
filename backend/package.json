@@ -6,7 +6,8 @@
     "scripts": {
         "test": "node --test tests/",
         "start": "nodemon index.js",
-        "seed:admin": "node scripts/bootstrapAdmin.js"
+        "seed:admin": "node scripts/bootstrapAdmin.js",
+        "seed:tn": "node scripts/seedTamilNadu.js"
     },
     "keywords": [
         "namma-blood",

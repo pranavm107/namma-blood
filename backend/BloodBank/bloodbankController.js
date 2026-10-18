@@ -116,7 +116,7 @@ const getBloodbanksByQuery = catchAsync(async (req, res) => {
 
 	if (
 		typeof req.query.category === 'string' &&
-		['Government', 'RedCross', 'Private'].includes(req.query.category.trim())
+		['Government', 'RedCross', 'Private', 'Charitable'].includes(req.query.category.trim())
 	) {
 		filter.category = req.query.category.trim()
 	}

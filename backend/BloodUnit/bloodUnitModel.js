@@ -187,6 +187,11 @@ const bloodUnitSchema = new mongoose.Schema(
 				ref: 'bloodbank',
 				default: null,
 			},
+			verifiedByStaffId: {
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'bloodbankstaff',
+				default: null,
+			},
 			verifiedAt: {
 				type: Date,
 				default: null,

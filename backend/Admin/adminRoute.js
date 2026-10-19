@@ -6,6 +6,8 @@ const {
 	resetPassword,
 	forgotPassword,
 } = require('../Login_And_Authentication/forgotPassword')
+const { verifyStaffLicense } = require('./adminController')
+
 const router = express.Router()
 
 router.use(selectAdminModel)
@@ -15,5 +17,8 @@ router.route('/login').post(loginMiddleware, login)
 router.route('/forgotpassword').post(forgotPassword)
 
 router.route('/resetpassword/:token').patch(resetPassword)
+
+// Global Administrator Medical Officer License Verification
+router.route('/staff/:staffId/verify-license').patch(protect, verifyStaffLicense)
 
 module.exports = router

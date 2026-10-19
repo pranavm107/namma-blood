@@ -5,6 +5,9 @@ const {
 	verifyBloodUnitClearance,
 	reserveBloodUnits,
 	releaseBloodUnitReservation,
+	issueBloodUnits,
+	recordCrossmatchResult,
+	dispatchBloodUnits,
 } = require('./bloodUnitController')
 const { selectBloodbankModel } = require('../Common/Middlewares/selectModels')
 const { protect } = require('../Login_And_Authentication/authMiddleware')
@@ -15,6 +18,22 @@ const {
 } = require('../BloodBank/bloodbankStaffMiddleware')
 
 const router = express.Router()
+
+// Final clinical unit issuance
+router
+	.route('/issue')
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		issueBloodUnits
+	)
+
+// Physical dispatch handoff
+router
+	.route('/dispatch')
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		dispatchBloodUnits
+	)
 
 // Patient request unit reservation & FEFO allocation
 router
@@ -30,6 +49,14 @@ router
 	.post(
 		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
 		releaseBloodUnitReservation
+	)
+
+// Record pre-issuance crossmatch compatibility result
+router
+	.route('/:id/crossmatch')
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		recordCrossmatchResult
 	)
 
 // Record TTI laboratory screening results for a unit

@@ -8,6 +8,12 @@ const {
 	reserveUnitsForRequest,
 	releaseReservationForRequest,
 } = require('./reservationService')
+const {
+	issueUnitsForRequest,
+	recordCrossmatchForUnit,
+	recordPhysicalDispatch,
+	VALID_CROSSMATCH_RESULTS,
+} = require('./issuanceService')
 
 const VALID_TEST_RESULTS = ['Pending', 'Non_Reactive', 'Reactive']
 
@@ -774,6 +780,338 @@ const releaseBloodUnitReservation = catchAsync(async (req, res, next) => {
 	})
 })
 
+/**
+ * Final Issuance & Physical Dispatch Endpoint.
+ * Transitions reserved traceable blood units to 'Issued' status and records physical dispatch.
+ *
+ * Invariants:
+ * 1. Role-permission & tenant scoping: Enforces bloodbank / authorized staff identity.
+ * 2. Crossmatch verification: Requires confirmed 'Compatible' or authorized 'Emergency_Uncrossmatched'.
+ * 3. Atomic conditional update: Guarantees no concurrent double-issuance.
+ * 4. Privacy: Omit donor PII completely from API response.
+ * 5. Legacy inventory isolation: Never modifies legacy aggregate Bloodstock.
+ */
+const issueBloodUnits = catchAsync(async (req, res, next) => {
+	const payload = req.body || {}
+
+	// Validate top-level keys against injection
+	const allowedKeys = [
+		'requestId',
+		'recipientPatientName',
+		'hospitalName',
+		'crossmatchResult',
+		'unitCrossmatches',
+		'dispatchNotes',
+		'isEmergency',
+		'emergencyReason',
+	]
+	for (const key of Object.keys(payload)) {
+		if (!allowedKeys.includes(key)) {
+			return res.status(400).json({
+				message: `Unrecognized or forbidden field: '${key}'. Field injection is strictly blocked.`,
+			})
+		}
+	}
+
+	const {
+		requestId,
+		recipientPatientName,
+		hospitalName,
+		crossmatchResult,
+		unitCrossmatches,
+		dispatchNotes,
+		isEmergency,
+		emergencyReason,
+	} = payload
+
+	if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+		return res.status(400).json({
+			message: 'Valid requestId is required for issuance.',
+		})
+	}
+
+	const trimmedRequestId = requestId.trim()
+	if (!mongoose.Types.ObjectId.isValid(trimmedRequestId)) {
+		return res.status(400).json({
+			message: 'Invalid requestId format: must be a valid ObjectId.',
+		})
+	}
+
+	if (recipientPatientName !== undefined && typeof recipientPatientName !== 'string') {
+		return res.status(400).json({
+			message: "'recipientPatientName' must be a string.",
+		})
+	}
+
+	if (hospitalName !== undefined && typeof hospitalName !== 'string') {
+		return res.status(400).json({
+			message: "'hospitalName' must be a string.",
+		})
+	}
+
+	if (dispatchNotes !== undefined && typeof dispatchNotes !== 'string') {
+		return res.status(400).json({
+			message: "'dispatchNotes' must be a string.",
+		})
+	}
+
+	// Clinical Governance Check: Emergency uncrossmatched issuance requires verified Medical Officer authorization
+	if (crossmatchResult === 'Emergency_Uncrossmatched' && isEmergency !== true) {
+		return res.status(400).json({
+			message:
+				"Clinical safety violation: Unit marked 'Emergency_Uncrossmatched' requires explicit emergency protocol authorization (isEmergency: true) for dispatch.",
+		})
+	}
+
+	const isEmergencyRequested =
+		isEmergency === true || crossmatchResult === 'Emergency_Uncrossmatched'
+	const isMOVerified = !!(
+		req.staff &&
+		req.staff.role === 'Medical_Officer' &&
+		req.staff.medicalLicense?.isVerified === true
+	)
+
+	if (isEmergencyRequested) {
+		if (!isMOVerified) {
+			return res.status(403).json({
+				message:
+					'Access forbidden: Emergency uncrossmatched blood issuance strictly requires authorization by a verified Medical Officer.',
+			})
+		}
+
+		if (
+			!emergencyReason ||
+			typeof emergencyReason !== 'string' ||
+			emergencyReason.trim().length < 10
+		) {
+			return res.status(400).json({
+				message:
+					'Clinical safety violation: Emergency uncrossmatched blood issuance requires clinical justification (emergencyReason of at least 10 characters).',
+			})
+		}
+	}
+
+	const bloodbankId = req.staff ? req.staff.bloodbankId : req.user._id
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const actorModel = 'bloodbank'
+	const staffId = req.staff ? req.staff._id : null
+
+	return await withTransaction(async (session) => {
+		const result = await issueUnitsForRequest({
+			requestId: trimmedRequestId,
+			bloodbankId,
+			actorId,
+			actorModel,
+			staffId,
+			isMOVerified,
+			recipientPatientName: recipientPatientName || '',
+			hospitalName: hospitalName || '',
+			crossmatchResult: crossmatchResult || null,
+			unitCrossmatches: unitCrossmatches || null,
+			dispatchNotes: dispatchNotes || '',
+			isEmergency: isEmergencyRequested,
+			emergencyReason: emergencyReason || '',
+			ipAddress: req.ip || null,
+			session,
+		})
+
+		return res.status(200).json({
+			message: `Successfully issued ${result.issuedUnits.length} unit(s) for receive request.`,
+			issuance: {
+				requestId: result.request._id,
+				recipientPatientName: result.recipientPatientName,
+				hospitalName: result.hospitalName,
+				status: result.request.status,
+				issuedAt: result.issuedAt,
+				isEmergency: result.isEmergency,
+				emergencyReason: result.emergencyReason || undefined,
+				unitsCount: result.issuedCount,
+				units: result.issuedUnits.map((u) => ({
+					_id: u._id,
+					unitNumber: u.unitNumber,
+					bloodGroup: u.bloodGroup,
+					componentType: u.componentType,
+					volumeMl: u.volumeMl,
+					crossmatchResult: u.issuance?.crossmatchResult,
+					issuedAt: u.issuance?.issuedAt,
+					isDispatched: u.issuance?.dispatch?.isDispatched || false,
+				})),
+			},
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
+/**
+ * Record Crossmatch Result for an individual blood unit.
+ */
+const recordCrossmatchResult = catchAsync(async (req, res, next) => {
+	const { id } = req.params
+	const payload = req.body || {}
+
+	const allowedKeys = ['crossmatchResult', 'notes', 'receiveRequestId']
+	for (const key of Object.keys(payload)) {
+		if (!allowedKeys.includes(key)) {
+			return res.status(400).json({
+				message: `Unrecognized or forbidden field: '${key}'. Field injection is strictly blocked.`,
+			})
+		}
+	}
+
+	const { crossmatchResult, notes, receiveRequestId } = payload
+
+	if (!id || (typeof id === 'string' && !id.trim())) {
+		return res.status(400).json({
+			message: 'Unit identifier (ID) is required.',
+		})
+	}
+
+	if (!crossmatchResult) {
+		return res.status(400).json({
+			message: 'crossmatchResult is required.',
+		})
+	}
+
+	const bloodbankId = req.staff ? req.staff.bloodbankId : req.user._id
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const actorModel = 'bloodbank'
+	const staffId = req.staff ? req.staff._id : null
+
+	return await withTransaction(async (session) => {
+		const unit = await recordCrossmatchForUnit({
+			unitId: id,
+			receiveRequestId: receiveRequestId || null,
+			bloodbankId,
+			actorId,
+			actorModel,
+			staffId,
+			ipAddress: req.ip || null,
+			crossmatchResult,
+			notes: notes || '',
+			session,
+		})
+
+		return res.status(200).json({
+			message: `Crossmatch result '${unit.issuance?.crossmatchResult}' recorded successfully.`,
+			unit: {
+				_id: unit._id,
+				unitNumber: unit.unitNumber,
+				bloodGroup: unit.bloodGroup,
+				status: unit.status,
+				crossmatchResult: unit.issuance?.crossmatchResult,
+			},
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
+/**
+ * Physical Dispatch Endpoint.
+ * Records the physical handoff and dispatch of clinically issued blood units.
+ */
+const dispatchBloodUnits = catchAsync(async (req, res, next) => {
+	const payload = req.body || {}
+
+	const allowedKeys = [
+		'requestId',
+		'unitIds',
+		'dispatchedToRecipient',
+		'transportBoxId',
+		'dispatchNotes',
+	]
+	for (const key of Object.keys(payload)) {
+		if (!allowedKeys.includes(key)) {
+			return res.status(400).json({
+				message: `Unrecognized or forbidden field: '${key}'. Field injection is strictly blocked.`,
+			})
+		}
+	}
+
+	const {
+		requestId,
+		unitIds,
+		dispatchedToRecipient,
+		transportBoxId,
+		dispatchNotes,
+	} = payload
+
+	if (!requestId && (!Array.isArray(unitIds) || unitIds.length === 0)) {
+		return res.status(400).json({
+			message: 'requestId or non-empty unitIds array is required for physical dispatch.',
+		})
+	}
+
+	if (dispatchedToRecipient !== undefined && typeof dispatchedToRecipient !== 'string') {
+		return res.status(400).json({
+			message: "'dispatchedToRecipient' must be a string.",
+		})
+	}
+
+	if (transportBoxId !== undefined && typeof transportBoxId !== 'string') {
+		return res.status(400).json({
+			message: "'transportBoxId' must be a string.",
+		})
+	}
+
+	if (dispatchNotes !== undefined && typeof dispatchNotes !== 'string') {
+		return res.status(400).json({
+			message: "'dispatchNotes' must be a string.",
+		})
+	}
+
+	const bloodbankId = req.staff ? req.staff.bloodbankId : req.user._id
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const actorModel = 'bloodbank'
+	const staffId = req.staff ? req.staff._id : null
+
+	return await withTransaction(async (session) => {
+		const result = await recordPhysicalDispatch({
+			requestId: requestId || null,
+			unitIds: unitIds || null,
+			bloodbankId,
+			actorId,
+			actorModel,
+			staffId,
+			dispatchedToRecipient: dispatchedToRecipient || '',
+			transportBoxId: transportBoxId || '',
+			dispatchNotes: dispatchNotes || '',
+			ipAddress: req.ip || null,
+			session,
+		})
+
+		return res.status(200).json({
+			message: `Successfully recorded physical dispatch for ${result.dispatchedCount} unit(s).`,
+			dispatch: {
+				dispatchedCount: result.dispatchedCount,
+				dispatchedAt: result.dispatchedAt,
+				dispatchedToRecipient: result.dispatchedToRecipient,
+				transportBoxId: result.transportBoxId,
+				units: result.dispatchedUnits.map((u) => ({
+					_id: u._id,
+					unitNumber: u.unitNumber,
+					bloodGroup: u.bloodGroup,
+					status: u.status,
+					isDispatched: u.issuance?.dispatch?.isDispatched,
+					dispatchedAt: u.issuance?.dispatch?.dispatchedAt,
+					dispatchedByStaffId: u.issuance?.dispatch?.dispatchedByStaffId,
+					dispatchedToRecipient: u.issuance?.dispatch?.dispatchedToRecipient,
+					transportBoxId: u.issuance?.dispatch?.transportBoxId,
+				})),
+			},
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
 module.exports = {
 	recordScreeningResults,
 	getBloodUnitById,
@@ -781,4 +1119,7 @@ module.exports = {
 	verifyBloodUnitClearance,
 	reserveBloodUnits,
 	releaseBloodUnitReservation,
+	issueBloodUnits,
+	recordCrossmatchResult,
+	dispatchBloodUnits,
 }

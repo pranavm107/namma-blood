@@ -256,6 +256,77 @@ const bloodUnitSchema = new mongoose.Schema(
 				ref: 'bloodbank',
 				default: null,
 			},
+			issuedByStaffId: {
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'bloodbankstaff',
+				default: null,
+			},
+			emergency: {
+				isEmergency: {
+					type: Boolean,
+					default: false,
+				},
+				emergencyReason: {
+					type: String,
+					trim: true,
+					default: '',
+				},
+				authorizedByStaffId: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'bloodbankstaff',
+					default: null,
+				},
+				authorizedAt: {
+					type: Date,
+					default: null,
+				},
+			},
+			dispatch: {
+				isDispatched: {
+					type: Boolean,
+					default: false,
+					index: true,
+				},
+				dispatchedAt: {
+					type: Date,
+					default: null,
+				},
+				dispatchedBy: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'bloodbank',
+					default: null,
+				},
+				dispatchedByStaffId: {
+					type: mongoose.Schema.Types.ObjectId,
+					ref: 'bloodbankstaff',
+					default: null,
+				},
+				dispatchedToRecipient: {
+					type: String,
+					trim: true,
+					default: '',
+				},
+				transportBoxId: {
+					type: String,
+					trim: true,
+					default: '',
+				},
+				dispatchNotes: {
+					type: String,
+					trim: true,
+					default: '',
+				},
+			},
+			dispatchedByStaffId: {
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'bloodbankstaff',
+				default: null,
+			},
+			dispatchNotes: {
+				type: String,
+				trim: true,
+				default: '',
+			},
 		},
 
 		// Discard / Destruction audit info

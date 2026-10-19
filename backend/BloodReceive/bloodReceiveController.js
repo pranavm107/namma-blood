@@ -370,6 +370,13 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 					err.statusCode = 400
 					throw err
 				}
+				if (unit.issuance?.crossmatchResult === 'Incompatible') {
+					const err = new Error(
+						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' has an Incompatible crossmatch result. Incompatible units cannot be fulfilled.`
+					)
+					err.statusCode = 400
+					throw err
+				}
 				if (unit.expiryDate && new Date(unit.expiryDate) <= now) {
 					const err = new Error(
 						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' has expired clinically.`

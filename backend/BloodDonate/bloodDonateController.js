@@ -254,6 +254,9 @@ const rejectRequestByUser = catchAsync(async (req, res, next) => {
 })
 
 const { withTransaction } = require('../Utils/transactionHelper')
+const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
+const { saveWithDINRetry } = require('../BloodUnit/dinGenerator')
+const { recordAuditLog } = require('../BloodUnit/bloodUnitAuditModel')
 
 const fulfilledRequest = catchAsync(async (req, res, next) => {
 	const { id, bloodType, whenToGive } = req.body
@@ -305,6 +308,20 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			throw err
 		}
 
+		// Idempotency: verify no existing BloodUnit references this donation request
+		const existingUnit = await BloodUnit.findOne(
+			{ donationRequestId: id },
+			null,
+			opts
+		)
+		if (existingUnit) {
+			const err = new Error(
+				'Request has already been fulfilled. Traceable unit has already been created.'
+			)
+			err.statusCode = 400
+			throw err
+		}
+
 		const updated = await DonateRequests.findOneAndUpdate(
 			{
 				_id: id,
@@ -325,19 +342,80 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			throw err
 		}
 
+		let unitDoc = null
 		try {
-			await bloodStockController.increaseStock(req.user._id, effectiveBloodType, 1, opts)
-		} catch (stockErr) {
+			const collectionDate = req.body.collectionDate ? new Date(req.body.collectionDate) : new Date()
+			const expiryDate = req.body.expiryDate
+				? new Date(req.body.expiryDate)
+				: new Date(collectionDate.getTime() + 35 * 24 * 60 * 60 * 1000)
+			const componentType = req.body.componentType || 'Whole_Blood'
+			const volumeMl = req.body.volumeMl ? Number(req.body.volumeMl) : 350
+
+			unitDoc = await saveWithDINRetry(
+				async (din) => {
+					const unit = new BloodUnit({
+						unitNumber: din,
+						bloodbankId: req.user._id,
+						donationRequestId: request._id,
+						donorUserId: request.userId || null,
+						bloodGroup: effectiveBloodType,
+						componentType,
+						volumeMl,
+						collectionDate,
+						expiryDate,
+						status: 'Quarantined',
+					})
+					return await unit.save(opts)
+				},
+				{
+					bloodbankId: req.user._id,
+					bloodGroup: effectiveBloodType,
+					componentType,
+					session: session || null,
+					maxRetries: 5,
+				}
+			)
+
+			await recordAuditLog({
+				unitId: unitDoc._id,
+				unitNumber: unitDoc.unitNumber,
+				bloodbankId: req.user._id,
+				action: 'UNIT_INTAKE_COLLECTED',
+				previousStatus: 'None',
+				newStatus: 'Quarantined',
+				actorId: req.user._id,
+				actorModel: 'bloodbank',
+				ipAddress: req.ip || null,
+				reason: 'Donation request fulfilled into quarantine intake',
+				metadata: {
+					donationRequestId: request._id,
+					donorUserId: request.userId || null,
+					bloodGroup: effectiveBloodType,
+					componentType: unitDoc.componentType,
+					volumeMl: unitDoc.volumeMl,
+				},
+				session: session || null,
+			})
+		} catch (unitErr) {
 			if (!session) {
 				await DonateRequests.findByIdAndUpdate(id, { status: request.status })
 			}
-			const err = new Error('Failed to update blood stock. Transaction rolled back.')
+			const err = new Error('Failed to create traceable blood unit. Transaction rolled back.')
 			err.statusCode = 500
 			throw err
 		}
 
 		return res.status(200).json({
 			message: 'Request Fulfilled.',
+			unit: {
+				_id: unitDoc._id,
+				unitNumber: unitDoc.unitNumber,
+				bloodGroup: unitDoc.bloodGroup,
+				componentType: unitDoc.componentType,
+				status: unitDoc.status,
+				collectionDate: unitDoc.collectionDate,
+				expiryDate: unitDoc.expiryDate,
+			},
 		})
 	}).catch((err) => {
 		return res.status(err.statusCode || 500).json({

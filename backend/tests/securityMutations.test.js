@@ -10,6 +10,7 @@ const ReceiveRequests = require('../BloodReceive/bloodReceiveModel')
 const Bloodbank = require('../BloodBank/bloodbankModel')
 const bloodStockController = require('../BloodStock/bloodStockController')
 const Bloodstock = require('../BloodStock/bloodStockModel')
+const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
 
 // Helper to mock req, res, next
 function createMockReqRes({ user, body = {}, query = {}, params = {} } = {}) {
@@ -454,12 +455,13 @@ describe('Blood Donation & Receive Handlers Security Hardening', () => {
 			}
 		})
 
-		it('should rollback donation request status if stock increment fails', async () => {
+		it('should rollback donation request status if unit creation fails', async () => {
 			let rolledBackTo = null
 			const originalFindOne = DonateRequests.findOne
 			const originalFindOneAndUpdate = DonateRequests.findOneAndUpdate
 			const originalFindByIdAndUpdate = DonateRequests.findByIdAndUpdate
-			const originalIncreaseStock = bloodStockController.increaseStock
+			const originalUnitFindOne = BloodUnit.findOne
+			const originalUnitSave = BloodUnit.prototype.save
 
 			DonateRequests.findOne = async () => ({
 				_id: validRequestId,
@@ -478,8 +480,10 @@ describe('Blood Donation & Receive Handlers Security Hardening', () => {
 				return {}
 			}
 
-			bloodStockController.increaseStock = async () => {
-				throw new Error('Database write failure during stock increment')
+			BloodUnit.findOne = async () => null
+
+			BloodUnit.prototype.save = async function () {
+				throw new Error('Database write failure during unit creation')
 			}
 
 			try {
@@ -489,12 +493,13 @@ describe('Blood Donation & Receive Handlers Security Hardening', () => {
 				})
 				await donateController.fulfilledRequest(req, res, next)
 				assert.strictEqual(res.statusCode, 500)
-				assert.strictEqual(rolledBackTo, 'Accepted', 'Request status must be rolled back on stock failure')
+				assert.strictEqual(rolledBackTo, 'Accepted', 'Request status must be rolled back on unit failure')
 			} finally {
 				DonateRequests.findOne = originalFindOne
 				DonateRequests.findOneAndUpdate = originalFindOneAndUpdate
 				DonateRequests.findByIdAndUpdate = originalFindByIdAndUpdate
-				bloodStockController.increaseStock = originalIncreaseStock
+				BloodUnit.findOne = originalUnitFindOne
+				BloodUnit.prototype.save = originalUnitSave
 			}
 		})
 

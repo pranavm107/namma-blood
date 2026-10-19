@@ -7,6 +7,8 @@ const receiveController = require('../BloodReceive/bloodReceiveController')
 const DonateRequests = require('../BloodDonate/bloodDonateModel')
 const ReceiveRequests = require('../BloodReceive/bloodReceiveModel')
 const bloodStockController = require('../BloodStock/bloodStockController')
+const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
+const { BloodUnitAuditLog } = require('../BloodUnit/bloodUnitAuditModel')
 const { canUseTransactions, withTransaction } = require('../Utils/transactionHelper')
 
 // Helper to create mock req, res, next
@@ -110,11 +112,15 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 
 			const originalFindOne = DonateRequests.findOne
 			const originalFindOneAndUpdate = DonateRequests.findOneAndUpdate
-			const originalIncreaseStock = bloodStockController.increaseStock
+			const originalUnitFindOne = BloodUnit.findOne
+			const originalUnitSave = BloodUnit.prototype.save
+			const originalAuditSave = BloodUnitAuditLog.prototype.save
 
 			let sessionPassedToFind = null
 			let sessionPassedToUpdate = null
-			let sessionPassedToStock = null
+			let sessionPassedToUnitFind = null
+			let sessionPassedToUnitSave = null
+			let sessionPassedToAudit = null
 
 			DonateRequests.findOne = async (query, proj, opts) => {
 				sessionPassedToFind = opts?.session
@@ -135,9 +141,21 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 				}
 			}
 
-			bloodStockController.increaseStock = async (bbId, bType, units, opts) => {
-				sessionPassedToStock = opts?.session
-				return { [bType]: 10 }
+			BloodUnit.findOne = async (query, proj, opts) => {
+				sessionPassedToUnitFind = opts?.session
+				return null
+			}
+
+			BloodUnit.prototype.save = async function (opts) {
+				sessionPassedToUnitSave = opts?.session
+				this._id = new mongoose.Types.ObjectId()
+				return this
+			}
+
+			BloodUnitAuditLog.prototype.save = async function (opts) {
+				sessionPassedToAudit = opts?.session
+				this._id = new mongoose.Types.ObjectId()
+				return this
 			}
 
 			try {
@@ -150,11 +168,15 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 
 				assert.strictEqual(res.statusCode, 200)
 				assert.strictEqual(res.responseData.message, 'Request Fulfilled.')
+				assert.ok(res.responseData.unit, 'Traceable unit details returned')
+				assert.strictEqual(res.responseData.unit.status, 'Quarantined')
 
 				// Verify all operations shared the exact same transaction session
 				assert.strictEqual(sessionPassedToFind, mockSession)
 				assert.strictEqual(sessionPassedToUpdate, mockSession)
-				assert.strictEqual(sessionPassedToStock, mockSession)
+				assert.strictEqual(sessionPassedToUnitFind, mockSession)
+				assert.strictEqual(sessionPassedToUnitSave, mockSession)
+				assert.strictEqual(sessionPassedToAudit, mockSession)
 
 				// Verify transaction committed and session ended
 				assert.strictEqual(mockSession.isCommitted, true)
@@ -164,7 +186,9 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 				mongoose.startSession = originalStartSession
 				DonateRequests.findOne = originalFindOne
 				DonateRequests.findOneAndUpdate = originalFindOneAndUpdate
-				bloodStockController.increaseStock = originalIncreaseStock
+				BloodUnit.findOne = originalUnitFindOne
+				BloodUnit.prototype.save = originalUnitSave
+				BloodUnitAuditLog.prototype.save = originalAuditSave
 			}
 		})
 
@@ -248,7 +272,7 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 	// 2. Transaction Rollback When a Related Operation Fails
 	// -------------------------------------------------------------
 	describe('2. Transaction Rollback on Failure', () => {
-		it('should abort transaction and rollback changes when stock increment fails in donation', async () => {
+		it('should abort transaction and rollback changes when unit creation fails in donation', async () => {
 			const mockSession = createMockSession()
 			const originalStartSession = mongoose.startSession
 			mongoose.startSession = async () => mockSession
@@ -256,7 +280,8 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 
 			const originalFindOne = DonateRequests.findOne
 			const originalFindOneAndUpdate = DonateRequests.findOneAndUpdate
-			const originalIncreaseStock = bloodStockController.increaseStock
+			const originalUnitFindOne = BloodUnit.findOne
+			const originalUnitSave = BloodUnit.prototype.save
 
 			DonateRequests.findOne = async () => ({
 				_id: requestId,
@@ -270,8 +295,10 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 				status: 'Fulfilled',
 			})
 
-			bloodStockController.increaseStock = async () => {
-				throw new Error('Database disk write failure during stock increment')
+			BloodUnit.findOne = async () => null
+
+			BloodUnit.prototype.save = async function () {
+				throw new Error('Database disk write failure during unit creation')
 			}
 
 			try {
@@ -293,7 +320,8 @@ describe('MongoDB Multi-Document Transaction Safety', () => {
 				mongoose.startSession = originalStartSession
 				DonateRequests.findOne = originalFindOne
 				DonateRequests.findOneAndUpdate = originalFindOneAndUpdate
-				bloodStockController.increaseStock = originalIncreaseStock
+				BloodUnit.findOne = originalUnitFindOne
+				BloodUnit.prototype.save = originalUnitSave
 			}
 		})
 

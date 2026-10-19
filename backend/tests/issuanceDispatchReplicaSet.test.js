@@ -19,7 +19,11 @@ const {
 	discardBloodUnits,
 	processClinicallyExpiredInventory,
 } = require('../BloodUnit/discardService')
+const reconciliationService = require('../BloodStock/reconciliationService')
+const { InventoryReconciliationRecord } = require('../BloodStock/reconciliationModel')
+const stockService = require('../BloodStock/stockService')
 const { withTransaction, canUseTransactions } = require('../Utils/transactionHelper')
+
 
 const TEST_DB_URI =
 	process.env.TEST_MONGODB_URI ||
@@ -120,10 +124,12 @@ describe('Phase 3.4 — Real MongoDB Replica-Set (rs0) Integration Validation', 
 		await BloodUnit.deleteMany({})
 		if (connection && connection.db) {
 			await connection.db.collection('bloodunitauditlogs').deleteMany({}).catch(() => {})
+			await connection.db.collection('inventoryreconciliations').deleteMany({}).catch(() => {})
 		}
 		await ReceiveRequests.deleteMany({})
 		await Bloodstock.deleteMany({})
 	})
+
 
 	// Helper to seed a valid, clearance-verified, TTI-cleared reserved BloodUnit
 	async function seedReservedUnit({
@@ -1175,5 +1181,197 @@ describe('Phase 3.4 — Real MongoDB Replica-Set (rs0) Integration Validation', 
 		)
 		assert.strictEqual(auditExpired.previousStatus, 'Available')
 		assert.strictEqual(auditExpired.newStatus, 'Expired')
+	})
+
+	// Scenario 15: Phase 3.7 Legacy Inventory Reconciliation & Safe Migration Safeguards on live rs0
+	it('Scenario 15: Legacy Inventory Reconciliation and Migration Safeguards on live rs0', async () => {
+		const now = new Date()
+
+		// 1. Setup initial legacy Bloodstock on rs0
+		await Bloodstock.create({
+			bloodbankId: testBloodbankId,
+			O_Positive: 5,
+			A_Positive: 3,
+			B_Negative: 0,
+		})
+
+		// 2. Generate Dry-Run Reconciliation Report
+		const report = await reconciliationService.generateReconciliationReport({
+			bloodbankId: testBloodbankId,
+			recordAudit: true,
+			actorId: testBloodbankId,
+		})
+		assert.strictEqual(report.status, 'COMPLETED')
+		assert.strictEqual(report.isClean, true)
+		assert.strictEqual(report.summary.legacyTotal, 8)
+		assert.strictEqual(report.summary.traceableTotal, 0)
+		assert.strictEqual(report.discrepancies.length, 1) // only UNSUPPORTED_COMPONENT_MAPPING notice
+		assert.strictEqual(report.discrepancies[0].type, 'UNSUPPORTED_COMPONENT_MAPPING')
+
+		// Confirm zero writes to inventory
+		const unitsCountBefore = await BloodUnit.countDocuments({ bloodbankId: testBloodbankId })
+		assert.strictEqual(unitsCountBefore, 0, 'Dry-run audit must perform zero unit writes.')
+
+		// 3. Dry-Run Migration Simulation
+		const din1 = getNextDIN()
+		const din2 = getNextDIN()
+		const dryRunManifest = [
+			{
+				unitNumber: din1,
+				bloodGroup: 'O_Positive',
+				componentType: 'Whole_Blood',
+				volumeMl: 350,
+				expiryDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+				deductFromLegacy: true,
+			},
+			{
+				unitNumber: din2,
+				bloodGroup: 'O_Positive',
+				componentType: 'Whole_Blood',
+				volumeMl: 350,
+				expiryDate: new Date(now.getTime() + 25 * 24 * 60 * 60 * 1000),
+				deductFromLegacy: true,
+			},
+		]
+
+		const dryRunRes = await reconciliationService.executeInventoryMigration({
+			bloodbankId: testBloodbankId,
+			mode: 'DRY_RUN',
+			migrationManifest: dryRunManifest,
+		})
+		assert.strictEqual(dryRunRes.mode, 'DRY_RUN')
+		assert.strictEqual(dryRunRes.isExecutable, true)
+		assert.strictEqual(dryRunRes.summary.validToMigrate, 2)
+		assert.strictEqual(dryRunRes.simulatedLegacyStockAfter.O_Positive, 3)
+
+		// Verify on DB that dry-run performed zero mutations
+		const unitsAfterDryRun = await BloodUnit.countDocuments({ bloodbankId: testBloodbankId })
+		assert.strictEqual(unitsAfterDryRun, 0)
+		const stockAfterDryRun = await Bloodstock.findOne({ bloodbankId: testBloodbankId })
+		assert.strictEqual(stockAfterDryRun.O_Positive, 5)
+
+		// 4. Safe Migration Execution on rs0 inside multi-document transaction
+		const execRes = await withTransaction(async (session) => {
+			return await reconciliationService.executeInventoryMigration({
+				bloodbankId: testBloodbankId,
+				mode: 'EXECUTE',
+				migrationManifest: dryRunManifest,
+				actorId: verifiedMOStaffId,
+				actorModel: 'bloodbankstaff',
+				session,
+			})
+		})
+
+		assert.strictEqual(execRes.mode, 'EXECUTE')
+		assert.strictEqual(execRes.status, 'COMPLETED')
+		assert.strictEqual(execRes.migratedCount, 2)
+
+		// Verify on live DB:
+		// A. Legacy stock decremented atomically
+		const freshStock = await Bloodstock.findOne({ bloodbankId: testBloodbankId })
+		assert.strictEqual(freshStock.O_Positive, 3, 'Legacy stock O_Positive decremented from 5 to 3')
+
+		// B. Traceable units created strictly Quarantined and NOT issue-eligible
+		const freshUnits = await BloodUnit.find({ bloodbankId: testBloodbankId }).sort({ unitNumber: 1 })
+		assert.strictEqual(freshUnits.length, 2)
+		for (const u of freshUnits) {
+			assert.strictEqual(u.status, 'Quarantined')
+			assert.strictEqual(u.isLegacyMigrated, true)
+			assert.strictEqual(u.clearance.isVerified, false)
+			assert.strictEqual(u.isIssueEligible(), false, 'Migrated unit must NEVER be issue-eligible')
+		}
+
+		// C. Audit logs persisted
+		const auditLogs = await BloodUnitAuditLog.find({
+			bloodbankId: testBloodbankId,
+			action: 'LEGACY_RECONCILED',
+		})
+		assert.strictEqual(auditLogs.length, 2)
+
+		const reconAudit = await InventoryReconciliationRecord.findOne({
+			bloodbankId: testBloodbankId,
+			runType: 'MIGRATION_EXECUTE',
+		})
+		assert.ok(reconAudit, 'InventoryReconciliationRecord must be persisted')
+		assert.strictEqual(reconAudit.summary.migratedCount, 2)
+
+		// 5. Double-Counting Prevention Verification
+		const consolidated = await stockService.getConsolidatedStock(testBloodbankId)
+		assert.strictEqual(consolidated.inventoryClassification, 'LEGACY_WITH_QUARANTINE_INTAKE')
+		assert.strictEqual(consolidated.legacyUnverifiedStock.O_Positive, 3)
+		assert.strictEqual(consolidated.traceableVerifiedStock.O_Positive, 0)
+		assert.strictEqual(consolidated.O_Positive, 3, 'Top-level O_Positive reflects remaining legacy stock')
+		assert.strictEqual(consolidated.traceableStatusBreakdown.Quarantined, 2)
+
+		// 6. Idempotent Retry & Resumability on rs0
+		const din3 = getNextDIN()
+		const reentrantManifest = [
+			dryRunManifest[0], // din1: already migrated
+			dryRunManifest[1], // din2: already migrated
+			{
+				unitNumber: din3, // new unit
+				bloodGroup: 'A_Positive',
+				componentType: 'Whole_Blood',
+				volumeMl: 350,
+				expiryDate: new Date(now.getTime() + 20 * 24 * 60 * 60 * 1000),
+				deductFromLegacy: true,
+			},
+		]
+
+		const retryRes = await withTransaction(async (session) => {
+			return await reconciliationService.executeInventoryMigration({
+				bloodbankId: testBloodbankId,
+				mode: 'EXECUTE',
+				migrationManifest: reentrantManifest,
+				actorId: verifiedMOStaffId,
+				actorModel: 'bloodbankstaff',
+				session,
+			})
+		})
+
+		assert.strictEqual(retryRes.migratedCount, 1, 'Only 1 new unit migrated')
+		assert.strictEqual(retryRes.alreadyMigratedCount, 2, '2 units recognized as ALREADY_MIGRATED')
+
+		// Legacy stock checks: O_Positive must NOT be re-decremented; A_Positive decremented 3 -> 2
+		const stockAfterRetry = await Bloodstock.findOne({ bloodbankId: testBloodbankId })
+		assert.strictEqual(stockAfterRetry.O_Positive, 3, 'O_Positive not decremented again')
+		assert.strictEqual(stockAfterRetry.A_Positive, 2, 'A_Positive decremented 3 to 2')
+		const totalUnitsAfterRetry = await BloodUnit.countDocuments({ bloodbankId: testBloodbankId })
+		assert.strictEqual(totalUnitsAfterRetry, 3, 'Total units in DB is 3')
+
+		// 7. Transaction Rollback on Conflict on rs0
+		const conflictManifest = [
+			{
+				unitNumber: getNextDIN(),
+				bloodGroup: 'B_Negative', // legacy stock has 0 units
+				expiryDate: new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000),
+				deductFromLegacy: true,
+			},
+		]
+
+		await assert.rejects(
+			async () => {
+				await withTransaction(async (session) => {
+					await reconciliationService.executeInventoryMigration({
+						bloodbankId: testBloodbankId,
+						mode: 'EXECUTE',
+						migrationManifest: conflictManifest,
+						actorId: verifiedMOStaffId,
+						session,
+					})
+				})
+			},
+			{
+				name: 'Error',
+				message: /Insufficient legacy stock for blood group B_Negative/i,
+			}
+		)
+
+		// Verify complete rollback on rs0
+		const countAfterConflict = await BloodUnit.countDocuments({ bloodbankId: testBloodbankId })
+		assert.strictEqual(countAfterConflict, 3, 'No unit was created during failed transaction')
+		const stockAfterConflict = await Bloodstock.findOne({ bloodbankId: testBloodbankId })
+		assert.strictEqual(stockAfterConflict.A_Positive, 2)
+		assert.strictEqual(stockAfterConflict.O_Positive, 3)
 	})
 })

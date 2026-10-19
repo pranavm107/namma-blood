@@ -163,8 +163,156 @@ function restrictToStaffRole(...allowedRoles) {
 	}
 }
 
+/**
+ * Authentication and authorization middleware supporting both:
+ * 1. Authenticated institutional blood bank accounts.
+ * 2. Authenticated individual staff members with specified allowed roles.
+ *
+ * Enforces:
+ * - Active account status (rejects Suspended or Revoked staff).
+ * - Token version invalidation & password change revocation.
+ * - Initial password change gate (mustChangePassword === false).
+ * - Role restrictions (allowedStaffRoles).
+ * - Clinical verification gate: Medical Officers MUST have verified medical credentials.
+ */
+function protectBloodbankOrStaff(...allowedStaffRoles) {
+	return catchAsync(async (req, res, next) => {
+		let token = null
+		if (
+			req.headers.authorization &&
+			req.headers.authorization.startsWith('Bearer')
+		) {
+			token = req.headers.authorization.split(' ')[1]
+		}
+
+		if (!token) {
+			return res.status(401).json({
+				message: 'Authentication required. Please log in to access this resource.',
+			})
+		}
+
+		let decoded = null
+		try {
+			decoded = await promisify(jwt.verify)(
+				token,
+				process.env.JWT_SECRET || 'test_jwt_secret_key_12345'
+			)
+		} catch (err) {
+			return res.status(401).json({
+				message: 'Invalid token. Authentication failed.',
+			})
+		}
+
+		const currentTime = Math.floor(Date.now() / 1000)
+		if (
+			!decoded.iat ||
+			typeof decoded.iat !== 'number' ||
+			isNaN(decoded.iat) ||
+			decoded.iat <= 0
+		) {
+			return res.status(401).json({
+				message: 'Invalid token! Missing or malformed issue timestamp.',
+			})
+		}
+
+		if (currentTime > decoded.exp) {
+			return res.status(401).json({
+				message: 'Token expired! Please log in again.',
+			})
+		}
+
+		// Staff token path
+		if (decoded.userType === 'staff') {
+			const staff = await BloodbankStaff.findById(decoded.id)
+			if (!staff) {
+				return res.status(401).json({
+					message: 'The staff account belonging to this token no longer exists.',
+				})
+			}
+
+			if (staff.changedPasswordAfter(decoded.iat, decoded.tokenVersion)) {
+				return res.status(401).json({
+					message: 'Staff credentials or permissions were recently updated! Please log in again.',
+				})
+			}
+
+			if (staff.status === 'Suspended') {
+				return res.status(401).json({
+					message: 'Your staff account is currently suspended. Access denied.',
+				})
+			}
+
+			if (staff.status === 'Revoked') {
+				return res.status(401).json({
+					message: 'Your staff account has been revoked. Access denied.',
+				})
+			}
+
+			if (staff.status !== 'Active') {
+				return res.status(401).json({
+					message: 'Staff account is inactive. Access denied.',
+				})
+			}
+
+			if (staff.mustChangePassword) {
+				return res.status(403).json({
+					message: 'Initial password change required before accessing role-restricted operations. Please change your password.',
+				})
+			}
+
+			if (allowedStaffRoles.length > 0 && !allowedStaffRoles.includes(staff.role)) {
+				return res.status(403).json({
+					message: `Access forbidden: Your role '${staff.role}' is not authorized for this operation. Required: ${allowedStaffRoles.join(', ')}.`,
+				})
+			}
+
+			if (staff.role === 'Medical_Officer' && !staff.medicalLicense?.isVerified) {
+				return res.status(403).json({
+					message: 'Access forbidden: Medical Officer credentials have not been verified by a Global Administrator.',
+				})
+			}
+
+			req.staff = staff
+			req.staffRole = staff.role
+			req.bloodbankId = staff.bloodbankId
+			req.user = {
+				_id: staff.bloodbankId,
+				staffId: staff._id,
+				staffName: staff.fullName,
+				staffRole: staff.role,
+				isStaff: true,
+			}
+			return next()
+		}
+
+		// Institutional blood bank token path
+		const Bloodbank = require('./bloodbankModel')
+		const bloodbank = await Bloodbank.findById(decoded.id).select('+password')
+		if (!bloodbank) {
+			return res.status(401).json({
+				message: 'The user belonging to this token does no longer exist.',
+			})
+		}
+
+		if (
+			bloodbank.changedPasswordAfter &&
+			bloodbank.changedPasswordAfter(decoded.iat, decoded.tokenVersion)
+		) {
+			return res.status(401).json({
+				message: 'User recently changed password! Please log in again.',
+			})
+		}
+
+		req.user = bloodbank
+		req.bloodbankId = bloodbank._id
+		req.staff = null
+		return next()
+	})
+}
+
 module.exports = {
 	generateStaffToken,
 	protectStaff,
 	restrictToStaffRole,
+	protectBloodbankOrStaff,
 }

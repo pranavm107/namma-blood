@@ -4,6 +4,10 @@ const AppError = require('../Utils/appError')
 const { withTransaction } = require('../Utils/transactionHelper')
 const { BloodUnit, MANDATORY_TTI_TESTS } = require('./bloodUnitModel')
 const { recordAuditLog } = require('./bloodUnitAuditModel')
+const {
+	reserveUnitsForRequest,
+	releaseReservationForRequest,
+} = require('./reservationService')
 
 const VALID_TEST_RESULTS = ['Pending', 'Non_Reactive', 'Reactive']
 
@@ -598,9 +602,183 @@ const verifyBloodUnitClearance = catchAsync(async (req, res, next) => {
 	})
 })
 
+/**
+ * Patient Receive Request Blood Unit Reservation & FEFO Allocation.
+ *
+ * Enforces:
+ * 1. Multi-Tenant Scoping (BOLA): Request must belong to authenticated blood bank.
+ * 2. Issue-Eligible Filtering: Available, verified clearance, non-reactive TTI tests, unexpired.
+ * 3. Deterministic FEFO Allocation: Earliest expiryDate first, older collectionDate, _id tie-breaker.
+ * 4. Atomic Conditional Update: DB-enforced status transition to 'Reserved'.
+ * 5. All-or-Nothing Sufficiency: If inventory is insufficient, fails closed with 400 without partial allocation.
+ * 6. Non-Repudiable Audit: Appends immutable 'UNIT_RESERVED' audit event within transaction.
+ * 7. Donor Privacy: Strips all donor PII from response.
+ * 8. Legacy Stock Isolation: Legacy aggregate counters are never allocated or modified.
+ */
+const reserveBloodUnits = catchAsync(async (req, res, next) => {
+	const payload = req.body || {}
+
+	// 1. Validate request body against tampering
+	const allowedKeys = ['requestId', 'componentType', 'holdHours']
+	for (const key of Object.keys(payload)) {
+		if (!allowedKeys.includes(key)) {
+			return res.status(400).json({
+				message: `Unrecognized or forbidden field: '${key}'. Field injection is strictly blocked.`,
+			})
+		}
+	}
+
+	const { requestId, componentType, holdHours } = payload
+
+	if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+		return res.status(400).json({
+			message: 'Valid requestId is required.',
+		})
+	}
+
+	const trimmedRequestId = requestId.trim()
+	if (!mongoose.Types.ObjectId.isValid(trimmedRequestId)) {
+		return res.status(400).json({
+			message: 'Invalid requestId format: must be a valid ObjectId.',
+		})
+	}
+
+	if (componentType !== undefined) {
+		const { VALID_COMPONENT_TYPES } = require('./bloodUnitModel')
+		if (!VALID_COMPONENT_TYPES.includes(componentType)) {
+			return res.status(400).json({
+				message: `Invalid componentType '${componentType}'. Allowed: ${VALID_COMPONENT_TYPES.join(', ')}.`,
+			})
+		}
+	}
+
+	if (holdHours !== undefined) {
+		const parsedHours = Number(holdHours)
+		if (isNaN(parsedHours) || parsedHours < 1 || parsedHours > 72) {
+			return res.status(400).json({
+				message: 'holdHours must be a number between 1 and 72.',
+			})
+		}
+	}
+
+	const bloodbankId = req.staff ? req.staff.bloodbankId : req.user._id
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const actorModel = 'bloodbank'
+
+	return await withTransaction(async (session) => {
+		const result = await reserveUnitsForRequest({
+			requestId: trimmedRequestId,
+			bloodbankId,
+			actorId,
+			actorModel,
+			ipAddress: req.ip || null,
+			componentType: componentType || null,
+			holdHours: holdHours || 24,
+			session,
+		})
+
+		return res.status(200).json({
+			message: `Successfully reserved ${result.reservedUnits.length} unit(s) for receive request.`,
+			reservation: {
+				requestId: result.request._id,
+				bloodType: result.request.bloodType,
+				unitsCount: result.reservedUnits.length,
+				status: result.request.status,
+				units: result.reservedUnits.map((u) => ({
+					_id: u._id,
+					unitNumber: u.unitNumber,
+					bloodGroup: u.bloodGroup,
+					componentType: u.componentType,
+					volumeMl: u.volumeMl,
+					expiryDate: u.expiryDate,
+					reservedAt: u.reservation?.reservedAt,
+					reservedExpiresAt: u.reservation?.reservedExpiresAt,
+				})),
+			},
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
+/**
+ * Explicit Reservation Release Endpoint.
+ * Releases all units reserved for a receive request back to Available inventory.
+ */
+const releaseBloodUnitReservation = catchAsync(async (req, res, next) => {
+	const payload = req.body || {}
+
+	const allowedKeys = ['requestId', 'reason']
+	for (const key of Object.keys(payload)) {
+		if (!allowedKeys.includes(key)) {
+			return res.status(400).json({
+				message: `Unrecognized or forbidden field: '${key}'. Field injection is strictly blocked.`,
+			})
+		}
+	}
+
+	const { requestId, reason } = payload
+
+	if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+		return res.status(400).json({
+			message: 'Valid requestId is required.',
+		})
+	}
+
+	const trimmedRequestId = requestId.trim()
+	if (!mongoose.Types.ObjectId.isValid(trimmedRequestId)) {
+		return res.status(400).json({
+			message: 'Invalid requestId format: must be a valid ObjectId.',
+		})
+	}
+
+	if (reason !== undefined) {
+		if (typeof reason !== 'string') {
+			return res.status(400).json({
+				message: "'reason' must be a string.",
+			})
+		}
+		if (reason.length > 500) {
+			return res.status(400).json({
+				message: "'reason' exceeds maximum permitted length of 500 characters.",
+			})
+		}
+	}
+
+	const bloodbankId = req.staff ? req.staff.bloodbankId : req.user._id
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const actorModel = 'bloodbank'
+
+	return await withTransaction(async (session) => {
+		const result = await releaseReservationForRequest({
+			requestId: trimmedRequestId,
+			bloodbankId,
+			actorId,
+			actorModel,
+			ipAddress: req.ip || null,
+			reason: reason || 'Reservation manually released by blood bank.',
+			session,
+		})
+
+		return res.status(200).json({
+			message: 'Reservation released successfully.',
+			releasedCount: result.releasedCount,
+			requestId: result.request._id,
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
 module.exports = {
 	recordScreeningResults,
 	getBloodUnitById,
 	findOwnedBloodUnit,
 	verifyBloodUnitClearance,
+	reserveBloodUnits,
+	releaseBloodUnitReservation,
 }

@@ -4,6 +4,7 @@ const catchAsync = require('../Utils/catchAsync')
 const ReceiveRequests = require('./bloodReceiveModel')
 const Bloodbank = require('../BloodBank/bloodbankModel')
 const AppError = require('../Utils/appError')
+const { withTransaction } = require('../Utils/transactionHelper')
 
 const VALID_BLOOD_TYPES = [
 	'A_Positive',
@@ -121,35 +122,60 @@ const rejectRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
-	const request = await ReceiveRequests.findOne({
-		_id: id,
-		bloodbankId: req.user._id,
-	})
+	return await withTransaction(async (session) => {
+		const opts = session ? { session } : {}
 
-	if (!request) {
-		return res.status(404).json({
-			message: 'Request not found.',
+		const request = await ReceiveRequests.findOne(
+			{
+				_id: id,
+				bloodbankId: req.user._id,
+			},
+			null,
+			opts
+		)
+
+		if (!request) {
+			const err = new Error('Request not found.')
+			err.statusCode = 404
+			throw err
+		}
+
+		if (request.status === 'Fulfilled') {
+			const err = new Error('Cannot reject an already fulfilled request.')
+			err.statusCode = 400
+			throw err
+		}
+
+		if (request.status === 'Rejected') {
+			const err = new Error('Request is already rejected.')
+			err.statusCode = 400
+			throw err
+		}
+
+		if (Array.isArray(request.reservedUnitIds) && request.reservedUnitIds.length > 0) {
+			const { releaseReservationForRequest } = require('../BloodUnit/reservationService')
+			await releaseReservationForRequest({
+				requestId: request._id,
+				bloodbankId: req.user._id,
+				actorId: req.user._id,
+				actorModel: 'bloodbank',
+				ipAddress: req.ip,
+				reason: message || 'Rejected by Bloodbank.',
+				session,
+			})
+		}
+
+		request.status = 'Rejected'
+		request.message = message || 'Rejected by Bloodbank.'
+		await request.save(opts)
+
+		return res.status(200).json({
+			message: 'Request Rejected.',
 		})
-	}
-
-	if (request.status === 'Fulfilled') {
-		return res.status(400).json({
-			message: 'Cannot reject an already fulfilled request.',
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
 		})
-	}
-
-	if (request.status === 'Rejected') {
-		return res.status(400).json({
-			message: 'Request is already rejected.',
-		})
-	}
-
-	request.status = 'Rejected'
-	request.message = message || 'Rejected by Bloodbank.'
-	await request.save()
-
-	return res.status(200).json({
-		message: 'Request Rejected.',
 	})
 })
 
@@ -213,39 +239,62 @@ const rejectRequestByUser = catchAsync(async (req, res, next) => {
 		})
 	}
 
-	const request = await ReceiveRequests.findOne({
-		_id: id,
-		userId: req.user._id,
-	})
+	return await withTransaction(async (session) => {
+		const opts = session ? { session } : {}
 
-	if (!request) {
-		return res.status(404).json({
-			message: 'Request not found.',
+		const request = await ReceiveRequests.findOne(
+			{
+				_id: id,
+				userId: req.user._id,
+			},
+			null,
+			opts
+		)
+
+		if (!request) {
+			const err = new Error('Request not found.')
+			err.statusCode = 404
+			throw err
+		}
+
+		if (request.status === 'Fulfilled') {
+			const err = new Error('Cannot cancel an already fulfilled request.')
+			err.statusCode = 400
+			throw err
+		}
+
+		if (request.status === 'Rejected') {
+			const err = new Error('Request is already cancelled.')
+			err.statusCode = 400
+			throw err
+		}
+
+		if (Array.isArray(request.reservedUnitIds) && request.reservedUnitIds.length > 0) {
+			const { releaseReservationForRequest } = require('../BloodUnit/reservationService')
+			await releaseReservationForRequest({
+				requestId: request._id,
+				bloodbankId: request.bloodbankId,
+				actorId: req.user._id,
+				actorModel: 'user',
+				ipAddress: req.ip,
+				reason: message || 'Cancelled by User.',
+				session,
+			})
+		}
+
+		request.status = 'Rejected'
+		request.message = message || 'Cancelled by User.'
+		await request.save(opts)
+
+		return res.status(200).json({
+			message: 'Request Rejected.',
 		})
-	}
-
-	if (request.status === 'Fulfilled') {
-		return res.status(400).json({
-			message: 'Cannot cancel an already fulfilled request.',
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
 		})
-	}
-
-	if (request.status === 'Rejected') {
-		return res.status(400).json({
-			message: 'Request is already cancelled.',
-		})
-	}
-
-	request.status = 'Rejected'
-	request.message = message || 'Cancelled by User.'
-	await request.save()
-
-	return res.status(200).json({
-		message: 'Request Rejected.',
 	})
 })
-
-const { withTransaction } = require('../Utils/transactionHelper')
 
 const fulfilledRequest = catchAsync(async (req, res, next) => {
 	const { id, bloodType, unit, whenDoYouWant } = req.body
@@ -297,36 +346,83 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			throw err
 		}
 
-		const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
+		const hasTraceableReservation =
+			Array.isArray(request.reservedUnitIds) && request.reservedUnitIds.length > 0
 
-		// Verify availability first
-		const isAvailable = await bloodStockController.checkAvailability(
-			req.user._id,
-			effectiveBloodType,
-			unitsToDeduct,
-			opts
-		)
-		if (!isAvailable) {
-			const err = new Error(
-				`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+		// If request has traceable reserved units, enforce reservation hold and clinical shelf-life!
+		if (hasTraceableReservation) {
+			const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
+			const reservedUnits = await BloodUnit.find(
+				{
+					_id: { $in: request.reservedUnitIds },
+					bloodbankId: req.user._id,
+				},
+				null,
+				opts
 			)
-			err.statusCode = 400
-			throw err
+
+			const now = new Date()
+			for (const unit of reservedUnits) {
+				if (unit.status !== 'Reserved') {
+					const err = new Error(
+						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' is no longer in Reserved status (current: ${unit.status}).`
+					)
+					err.statusCode = 400
+					throw err
+				}
+				if (unit.expiryDate && new Date(unit.expiryDate) <= now) {
+					const err = new Error(
+						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' has expired clinically.`
+					)
+					err.statusCode = 400
+					throw err
+				}
+				if (
+					unit.reservation?.reservedExpiresAt &&
+					new Date(unit.reservation.reservedExpiresAt) <= now
+				) {
+					const err = new Error(
+						`Cannot fulfill request: Reservation hold for unit '${unit.unitNumber || unit._id}' has expired.`
+					)
+					err.statusCode = 400
+					throw err
+				}
+			}
 		}
 
-		// 1. Atomically decrement stock
-		const stockUpdated = await bloodStockController.decreaseStock(
-			req.user._id,
-			effectiveBloodType,
-			unitsToDeduct,
-			opts
-		)
-		if (!stockUpdated) {
-			const err = new Error(
-				`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+		const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
+
+		// Legacy stock isolation: Do not check or decrease legacy aggregate stock if fulfilling via traceable units!
+		if (!hasTraceableReservation) {
+			// Verify availability first
+			const isAvailable = await bloodStockController.checkAvailability(
+				req.user._id,
+				effectiveBloodType,
+				unitsToDeduct,
+				opts
 			)
-			err.statusCode = 400
-			throw err
+			if (!isAvailable) {
+				const err = new Error(
+					`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+				)
+				err.statusCode = 400
+				throw err
+			}
+
+			// 1. Atomically decrement stock
+			const stockUpdated = await bloodStockController.decreaseStock(
+				req.user._id,
+				effectiveBloodType,
+				unitsToDeduct,
+				opts
+			)
+			if (!stockUpdated) {
+				const err = new Error(
+					`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+				)
+				err.statusCode = 400
+				throw err
+			}
 		}
 
 		// 2. Atomically transition request to Fulfilled
@@ -345,9 +441,9 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			{ new: true, ...opts }
 		)
 
-		// If request transition failed (e.g. concurrent fulfillment), restore decremented stock!
+		// If request transition failed (e.g. concurrent fulfillment), restore decremented legacy stock!
 		if (!updated) {
-			if (!session) {
+			if (!session && !hasTraceableReservation) {
 				await bloodStockController.increaseStock(
 					req.user._id,
 					effectiveBloodType,

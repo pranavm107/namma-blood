@@ -8,6 +8,7 @@ const {
 	issueBloodUnits,
 	recordCrossmatchResult,
 	dispatchBloodUnits,
+	discardBloodUnit,
 } = require('./bloodUnitController')
 const { selectBloodbankModel } = require('../Common/Middlewares/selectModels')
 const { protect } = require('../Login_And_Authentication/authMiddleware')
@@ -57,6 +58,21 @@ router
 	.post(
 		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
 		recordCrossmatchResult
+	)
+
+// Authorized blood unit biohazard / clinical discard
+router
+	.route('/discard')
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		discardBloodUnit
+	)
+
+router
+	.route('/:id/discard')
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		discardBloodUnit
 	)
 
 // Record TTI laboratory screening results for a unit

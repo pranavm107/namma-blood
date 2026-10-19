@@ -354,7 +354,17 @@ const bloodUnitSchema = new mongoose.Schema(
 				ref: 'bloodbank',
 				default: null,
 			},
+			discardedByStaffId: {
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'bloodbankstaff',
+				default: null,
+			},
 			wasteManifestNumber: {
+				type: String,
+				trim: true,
+				default: '',
+			},
+			discardNotes: {
 				type: String,
 				trim: true,
 				default: '',

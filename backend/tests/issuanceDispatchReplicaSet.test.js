@@ -15,6 +15,10 @@ const {
 	recordPhysicalDispatch,
 } = require('../BloodUnit/issuanceService')
 const { processExpiredReservations } = require('../BloodUnit/reservationExpiryWorker')
+const {
+	discardBloodUnits,
+	processClinicallyExpiredInventory,
+} = require('../BloodUnit/discardService')
 const { withTransaction, canUseTransactions } = require('../Utils/transactionHelper')
 
 const TEST_DB_URI =
@@ -1026,5 +1030,150 @@ describe('Phase 3.4 — Real MongoDB Replica-Set (rs0) Integration Validation', 
 		})
 		assert.strictEqual(secondRun.processedCount, 0)
 		assert.strictEqual(secondRun.candidatesFound, 0)
+	})
+
+	// =========================================================================
+	// Scenario 14: Phase 3.6 Biohazard Discard & Shelf-Life Expiry on live rs0
+	// =========================================================================
+	it('Scenario 14: Authorized discard and shelf-life expiry decouple reserved requests, enforce duplicate protection, record immutable audit logs, and isolate legacy stock on live rs0', async () => {
+		const now = new Date()
+
+		// 1. Seed units: 1 Quarantined unit (TTI reactive discard), 1 Reserved unit, 1 Available shelf-life expired unit
+		const reactiveUnit = await seedReservedUnit({
+			status: 'Quarantined',
+			testing: {
+				hiv: 'Reactive',
+				hbv: 'Non_Reactive',
+				hcv: 'Non_Reactive',
+				syphilis: 'Non_Reactive',
+				malaria: 'Non_Reactive',
+			},
+		})
+
+		const reservedUnit = await seedReservedUnit({
+			status: 'Reserved',
+			expiryDate: new Date(now.getTime() + 15 * 24 * 3600 * 1000),
+		})
+
+		const shelfLifeExpiredUnit = await seedReservedUnit({
+			status: 'Available',
+			clearance: { isVerified: true, verifiedAt: new Date() },
+			expiryDate: new Date(now.getTime() + 2 * 3600 * 1000),
+		})
+		await connection.db.collection('bloodunits').updateOne(
+			{ _id: shelfLifeExpiredUnit._id },
+			{ $set: { expiryDate: new Date(now.getTime() - 2 * 3600 * 1000) } }
+		)
+
+		const request = await seedReceiveRequest({
+			unitCount: 1,
+			status: 'Accepted',
+			reservedUnitIds: [reservedUnit._id],
+		})
+		reservedUnit.reservation.receiveRequestId = request._id
+		await reservedUnit.save()
+
+		// 2. Discard reactive Quarantined unit inside real transaction
+		await withTransaction(async (session) => {
+			await discardBloodUnits({
+				unitIds: [reactiveUnit._id],
+				bloodbankId: testBloodbankId,
+				reason: 'TTI_Reactive',
+				wasteManifestNumber: 'WM-RS0-BIO-01',
+				notes: 'HIV-1 Confirmatory Reactive. Biohazard incineration scheduled.',
+				actorId: testBloodbankId,
+				staffId: labTechStaffId,
+				session,
+			})
+		})
+
+		const discardedReactive = await BloodUnit.findById(reactiveUnit._id)
+		assert.strictEqual(discardedReactive.status, 'Discarded')
+		assert.strictEqual(discardedReactive.discard.reason, 'TTI_Reactive')
+		assert.strictEqual(discardedReactive.discard.wasteManifestNumber, 'WM-RS0-BIO-01')
+		assert.strictEqual(
+			discardedReactive.discard.discardedByStaffId.toString(),
+			labTechStaffId.toString()
+		)
+
+		const auditReactive = await BloodUnitAuditLog.findOne({
+			unitId: reactiveUnit._id,
+			action: 'UNIT_DISCARDED',
+		})
+		assert.ok(auditReactive, 'UNIT_DISCARDED audit event must be persisted.')
+		assert.strictEqual(auditReactive.previousStatus, 'Quarantined')
+		assert.strictEqual(auditReactive.newStatus, 'Discarded')
+
+		// 3. Discard Reserved unit: must decouple from receive request
+		await withTransaction(async (session) => {
+			await discardBloodUnits({
+				unitIds: [reservedUnit._id],
+				bloodbankId: testBloodbankId,
+				reason: 'Clotted',
+				actorId: testBloodbankId,
+				staffId: verifiedMOStaffId,
+				session,
+			})
+		})
+
+		const freshRequest = await ReceiveRequests.findById(request._id)
+		assert.strictEqual(
+			freshRequest.status,
+			'Accepted',
+			'Request status remains Accepted for re-allocation.'
+		)
+		assert.strictEqual(
+			freshRequest.reservedUnitIds.length,
+			0,
+			'Reserved unit ID must be pulled upon discard.'
+		)
+
+		const freshReserved = await BloodUnit.findById(reservedUnit._id)
+		assert.strictEqual(freshReserved.status, 'Discarded')
+		assert.strictEqual(freshReserved.reservation.receiveRequestId, null)
+
+		// 4. Duplicate Discard Guard on rs0: Attempting to discard again must fail
+		await assert.rejects(
+			async () => {
+				await withTransaction(async (session) => {
+					await discardBloodUnits({
+						unitIds: [discardedReactive._id],
+						bloodbankId: testBloodbankId,
+						reason: 'TTI_Reactive',
+						actorId: testBloodbankId,
+						session,
+					})
+				})
+			},
+			{
+				name: 'Error',
+				message: /Unit has already been discarded.*Duplicate discard is rejected/i,
+			}
+		)
+
+		// 5. Process Shelf-Life Expiry on rs0
+		await withTransaction(async (session) => {
+			const expiryResult = await processClinicallyExpiredInventory({
+				batchSize: 50,
+				now,
+				bloodbankId: testBloodbankId,
+				session,
+			})
+			assert.strictEqual(expiryResult.processedCount, 1)
+		})
+
+		const freshExpiredShelfUnit = await BloodUnit.findById(shelfLifeExpiredUnit._id)
+		assert.strictEqual(freshExpiredShelfUnit.status, 'Expired')
+
+		const auditExpired = await BloodUnitAuditLog.findOne({
+			unitId: shelfLifeExpiredUnit._id,
+			action: 'UNIT_EXPIRED',
+		})
+		assert.ok(
+			auditExpired,
+			'UNIT_EXPIRED audit event must be persisted for shelf-life elapsed unit.'
+		)
+		assert.strictEqual(auditExpired.previousStatus, 'Available')
+		assert.strictEqual(auditExpired.newStatus, 'Expired')
 	})
 })

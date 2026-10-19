@@ -1112,6 +1112,77 @@ const dispatchBloodUnits = catchAsync(async (req, res, next) => {
 	})
 })
 
+const { discardBloodUnits } = require('./discardService')
+
+/**
+ * Authorized biohazard or clinical discard of traceable blood units.
+ *
+ * Safety & Audit Guarantees:
+ * 1. Enforces staff or blood bank authentication and tenant scoping.
+ * 2. Requires a valid discard reason from VALID_DISCARD_REASONS.
+ * 3. Enforces valid lifecycle state transitions (Quarantined, Tested_Passed, Available, Reserved, Expired).
+ * 4. Rejects units already Discarded (duplicate discard guard), Issued, or Dispatched.
+ * 5. Pulls references from ReceiveRequests if discarded unit was Reserved.
+ * 6. Appends immutable 'UNIT_DISCARDED' audit event inside transaction.
+ * 7. Never mutates legacy aggregate Bloodstock.
+ */
+const discardBloodUnit = catchAsync(async (req, res, next) => {
+	const bloodbankId = req.bloodbankId || req.user?._id
+	if (!bloodbankId) {
+		return res.status(401).json({
+			message: 'Authentication required: Owning blood bank ID is missing.',
+		})
+	}
+
+	const unitIdentifier = req.params?.id || req.body?.unitId || req.body?.unitIds
+	const { reason, wasteManifestNumber, notes } = req.body || {}
+
+	if (!unitIdentifier) {
+		return res.status(400).json({
+			message: 'Blood unit identifier (id, unitId, or unitIds) is required.',
+		})
+	}
+
+	const actorId = req.user?._id
+	const staffId = req.staff?._id || req.user?.staffId || null
+	const actorModel = 'bloodbank'
+
+	return await withTransaction(async (session) => {
+		const result = await discardBloodUnits({
+			unitIds: unitIdentifier,
+			bloodbankId,
+			reason,
+			wasteManifestNumber: wasteManifestNumber || '',
+			notes: notes || '',
+			actorId,
+			actorModel,
+			staffId,
+			ipAddress: req.ip || null,
+			session,
+		})
+
+		return res.status(200).json({
+			message: `Successfully discarded ${result.discardedCount} blood unit(s).`,
+			discard: {
+				discardedCount: result.discardedCount,
+				discardedAt: result.discardedAt,
+				reason,
+				units: result.discardedUnits.map((u) => ({
+					_id: u._id,
+					unitNumber: u.unitNumber,
+					bloodGroup: u.bloodGroup,
+					status: u.status,
+					discard: u.discard,
+				})),
+			},
+		})
+	}).catch((err) => {
+		return res.status(err.statusCode || 500).json({
+			message: err.message,
+		})
+	})
+})
+
 module.exports = {
 	recordScreeningResults,
 	getBloodUnitById,
@@ -1122,4 +1193,5 @@ module.exports = {
 	issueBloodUnits,
 	recordCrossmatchResult,
 	dispatchBloodUnits,
+	discardBloodUnit,
 }

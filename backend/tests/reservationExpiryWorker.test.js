@@ -7,9 +7,13 @@ const { BloodUnitAuditLog } = require('../BloodUnit/bloodUnitAuditModel')
 const ReceiveRequests = require('../BloodReceive/bloodReceiveModel')
 const Bloodstock = require('../BloodStock/bloodStockModel')
 const {
+	parseWorkerConfig,
 	processExpiredReservations,
 	startReservationExpiryWorker,
 	stopReservationExpiryWorker,
+	getWorkerStatus,
+	sanitizeErrorMessage,
+	_resetWorkerStateForTests,
 } = require('../BloodUnit/reservationExpiryWorker')
 
 function createMockSession() {
@@ -57,7 +61,7 @@ function mockChainableFind(results = []) {
 	return obj
 }
 
-describe('Reservation-Expiry Worker — Unit & Concurrency Safety', () => {
+describe('Reservation-Expiry Worker — Safety, Hardening & Recovery', () => {
 	const mockBloodbankId = new mongoose.Types.ObjectId()
 	const otherBloodbankId = new mongoose.Types.ObjectId()
 	const mockRequestId = new mongoose.Types.ObjectId()
@@ -67,8 +71,19 @@ describe('Reservation-Expiry Worker — Unit & Concurrency Safety', () => {
 	const originalUnitFindOne = BloodUnit.findOne
 	const originalReqFindOneAndUpdate = ReceiveRequests.findOneAndUpdate
 	const originalAuditSave = BloodUnitAuditLog.prototype.save
+	let originalReadyState
 
 	beforeEach(() => {
+		_resetWorkerStateForTests()
+
+		// Mock active DB readyState by default
+		originalReadyState = mongoose.connection.readyState
+		Object.defineProperty(mongoose.connection, 'readyState', {
+			value: 1,
+			configurable: true,
+			writable: true,
+		})
+
 		mongoose.startSession = async () => createMockSession()
 		mongoose.startSession._isMock = true
 		BloodUnit.find = () => mockChainableFind([])
@@ -79,13 +94,21 @@ describe('Reservation-Expiry Worker — Unit & Concurrency Safety', () => {
 		}
 	})
 
-	afterEach(() => {
+	afterEach(async () => {
+		await stopReservationExpiryWorker({ drain: false })
+		_resetWorkerStateForTests()
+
+		Object.defineProperty(mongoose.connection, 'readyState', {
+			value: originalReadyState,
+			configurable: true,
+			writable: true,
+		})
+
 		mongoose.startSession = originalStartSession
 		BloodUnit.find = originalUnitFind
 		BloodUnit.findOne = originalUnitFindOne
 		ReceiveRequests.findOneAndUpdate = originalReqFindOneAndUpdate
 		BloodUnitAuditLog.prototype.save = originalAuditSave
-		stopReservationExpiryWorker()
 	})
 
 	function createUnitDoc(overrides = {}) {
@@ -372,6 +395,7 @@ describe('Reservation-Expiry Worker — Unit & Concurrency Safety', () => {
 
 			const worker = startReservationExpiryWorker({
 				intervalMs: 10000,
+				runOnBoot: false,
 				logger: { info: () => {}, warn: () => {} },
 			})
 			assert.strictEqual(worker.isRunning(), true)
@@ -381,8 +405,312 @@ describe('Reservation-Expiry Worker — Unit & Concurrency Safety', () => {
 			assert.strictEqual(tickCount, 1)
 
 			// Stop cleanly
-			worker.stop()
+			await worker.stop()
 			assert.strictEqual(worker.isRunning(), false)
+		})
+	})
+
+	// =========================================================================
+	// 12. Central Configuration Parsing & Boundary Clamping
+	// =========================================================================
+	describe('12. Central Configuration Parsing & Boundary Clamping', () => {
+		it('should parse environment variables with safe defaults when empty or invalid', () => {
+			const emptyConfig = parseWorkerConfig({})
+			assert.strictEqual(emptyConfig.enabled, false)
+			assert.strictEqual(emptyConfig.intervalMs, 60000)
+			assert.strictEqual(emptyConfig.batchSize, 100)
+			assert.strictEqual(emptyConfig.runOnBoot, true)
+		})
+
+		it('should correctly parse enabled flag across casing and whitespace', () => {
+			assert.strictEqual(parseWorkerConfig({ ENABLE_RESERVATION_EXPIRY_WORKER: 'true' }).enabled, true)
+			assert.strictEqual(parseWorkerConfig({ ENABLE_RESERVATION_EXPIRY_WORKER: 'TRUE' }).enabled, true)
+			assert.strictEqual(parseWorkerConfig({ ENABLE_RESERVATION_EXPIRY_WORKER: '  true  ' }).enabled, true)
+			assert.strictEqual(parseWorkerConfig({ ENABLE_RESERVATION_EXPIRY_WORKER: 'false' }).enabled, false)
+			assert.strictEqual(parseWorkerConfig({ ENABLE_RESERVATION_EXPIRY_WORKER: 'invalid' }).enabled, false)
+		})
+
+		it('should clamp intervalMs to minimum 5000ms', () => {
+			const lowInterval = parseWorkerConfig({ RESERVATION_EXPIRY_INTERVAL_MS: '1000' })
+			assert.strictEqual(lowInterval.intervalMs, 5000, 'Intervals < 5000ms must be clamped to 5000ms.')
+
+			const validInterval = parseWorkerConfig({ RESERVATION_EXPIRY_INTERVAL_MS: '30000' })
+			assert.strictEqual(validInterval.intervalMs, 30000)
+
+			const invalidInterval = parseWorkerConfig({ RESERVATION_EXPIRY_INTERVAL_MS: 'not_a_number' })
+			assert.strictEqual(invalidInterval.intervalMs, 60000)
+		})
+
+		it('should clamp batchSize between 1 and 500', () => {
+			const zeroBatch = parseWorkerConfig({ RESERVATION_EXPIRY_BATCH_SIZE: '0' })
+			assert.strictEqual(zeroBatch.batchSize, 1)
+
+			const negativeBatch = parseWorkerConfig({ RESERVATION_EXPIRY_BATCH_SIZE: '-50' })
+			assert.strictEqual(negativeBatch.batchSize, 1)
+
+			const overBatch = parseWorkerConfig({ RESERVATION_EXPIRY_BATCH_SIZE: '9999' })
+			assert.strictEqual(overBatch.batchSize, 500)
+
+			const validBatch = parseWorkerConfig({ RESERVATION_EXPIRY_BATCH_SIZE: '250' })
+			assert.strictEqual(validBatch.batchSize, 250)
+		})
+
+		it('should parse runOnBoot flag correctly', () => {
+			assert.strictEqual(parseWorkerConfig({ RESERVATION_EXPIRY_RUN_ON_BOOT: 'false' }).runOnBoot, false)
+			assert.strictEqual(parseWorkerConfig({ RESERVATION_EXPIRY_RUN_ON_BOOT: '0' }).runOnBoot, false)
+			assert.strictEqual(parseWorkerConfig({ RESERVATION_EXPIRY_RUN_ON_BOOT: 'true' }).runOnBoot, true)
+			assert.strictEqual(parseWorkerConfig({}).runOnBoot, true)
+		})
+	})
+
+	// =========================================================================
+	// 13. Observability & Health Monitoring (getWorkerStatus)
+	// =========================================================================
+	describe('13. Observability & Health Monitoring (getWorkerStatus)', () => {
+		it('should report idle status before startup', () => {
+			const status = getWorkerStatus()
+			assert.strictEqual(status.isRunning, false)
+			assert.strictEqual(status.isTickRunning, false)
+			assert.strictEqual(status.bootedAt, null)
+			assert.strictEqual(status.metrics.totalRuns, 0)
+			assert.strictEqual(status.metrics.totalProcessedCount, 0)
+		})
+
+		it('should record execution telemetry, boot timestamp, and cumulative counters upon sweep', async () => {
+			const expiredUnit = createUnitDoc()
+			BloodUnit.find = () => mockChainableFind([expiredUnit])
+			BloodUnit.findOne = async () => expiredUnit
+
+			const worker = startReservationExpiryWorker({
+				intervalMs: 15000,
+				batchSize: 50,
+				runOnBoot: false,
+				logger: { info: () => {}, warn: () => {} },
+			})
+
+			const beforeStatus = getWorkerStatus()
+			assert.strictEqual(beforeStatus.isRunning, true)
+			assert.ok(beforeStatus.bootedAt)
+			assert.strictEqual(beforeStatus.config.batchSize, 50)
+			assert.strictEqual(beforeStatus.config.intervalMs, 15000)
+
+			await worker.runOnce()
+
+			const afterStatus = getWorkerStatus()
+			assert.strictEqual(afterStatus.metrics.totalRuns, 1)
+			assert.strictEqual(afterStatus.metrics.totalProcessedCount, 1)
+			assert.strictEqual(afterStatus.metrics.totalReleasedCount, 1)
+			assert.strictEqual(afterStatus.metrics.totalExpiredCount, 0)
+			assert.ok(afterStatus.lastRunAt)
+			assert.ok(typeof afterStatus.lastRunDurationMs === 'number')
+			assert.strictEqual(afterStatus.lastRunResult.processedCount, 1)
+
+			await worker.stop()
+		})
+	})
+
+	// =========================================================================
+	// 14. Error Sanitization (Secrets & URI Scrubbing)
+	// =========================================================================
+	describe('14. Error Sanitization', () => {
+		it('should scrub MongoDB credentials and sensitive authorization tokens from logged errors', () => {
+			const uriError = 'Connection failed: mongodb+srv://app_user:SuperSecretPassword123@cluster0.abc.mongodb.net/prod'
+			const sanitizedUri = sanitizeErrorMessage(uriError)
+			assert.doesNotMatch(sanitizedUri, /SuperSecretPassword123/)
+			assert.match(sanitizedUri, /mongodb:\/\/[*]{3}:[*]{3}@/)
+
+			const tokenError = 'Unauthorized request with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-IDjhBy'
+			const sanitizedToken = sanitizeErrorMessage(tokenError)
+			assert.doesNotMatch(sanitizedToken, /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9/)
+			assert.match(sanitizedToken, /Bearer [*]{3}/)
+		})
+	})
+
+	// =========================================================================
+	// 15. Database Disconnection & Resilience Handling
+	// =========================================================================
+	describe('15. Database Disconnection & Resilience Handling', () => {
+		it('should skip sweep safely when database is disconnected (readyState !== 1) without throwing unhandled rejection', async () => {
+			// Mock database disconnected state
+			Object.defineProperty(mongoose.connection, 'readyState', {
+				value: 0, // 0 = disconnected
+				configurable: true,
+				writable: true,
+			})
+
+			let warnLogged = false
+			const mockLogger = {
+				warn: (msg) => {
+					warnLogged = true
+					assert.match(msg, /Database is not connected \(readyState=0/)
+				},
+				info: () => {},
+				error: () => {},
+			}
+
+			const result = await processExpiredReservations({ logger: mockLogger })
+			assert.strictEqual(result.success, false)
+			assert.strictEqual(result.dbNotReady, true)
+			assert.strictEqual(result.processedCount, 0)
+			assert.strictEqual(result.candidatesFound, 0)
+			assert.strictEqual(warnLogged, true)
+		})
+
+		it('should resume normal processing seamlessly once database reconnects', async () => {
+			const expiredUnit = createUnitDoc()
+			BloodUnit.find = () => mockChainableFind([expiredUnit])
+			BloodUnit.findOne = async () => expiredUnit
+
+			// 1. First sweep while disconnected
+			Object.defineProperty(mongoose.connection, 'readyState', {
+				value: 0,
+				configurable: true,
+				writable: true,
+			})
+			const skippedResult = await processExpiredReservations({ logger: { warn: () => {} } })
+			assert.strictEqual(skippedResult.dbNotReady, true)
+
+			// 2. Database reconnects
+			Object.defineProperty(mongoose.connection, 'readyState', {
+				value: 1,
+				configurable: true,
+				writable: true,
+			})
+			const recoveredResult = await processExpiredReservations({ logger: { info: () => {} } })
+			assert.strictEqual(recoveredResult.success, true)
+			assert.strictEqual(recoveredResult.processedCount, 1)
+			assert.strictEqual(recoveredResult.releasedToAvailableCount, 1)
+		})
+	})
+
+	// =========================================================================
+	// 16. Immediate Run-On-Boot & Overlap Prevention
+	// =========================================================================
+	describe('16. Immediate Run-On-Boot & Overlap Prevention', () => {
+		it('should execute boot sweep immediately when runOnBoot is true and prevent duplicate start', async () => {
+			let sweepCount = 0
+			BloodUnit.find = () => {
+				sweepCount++
+				return mockChainableFind([])
+			}
+
+			const worker = startReservationExpiryWorker({
+				intervalMs: 60000,
+				runOnBoot: true,
+				logger: { info: () => {}, warn: () => {} },
+			})
+
+			// Attempt duplicate start
+			let duplicateWarned = false
+			const duplicateWorker = startReservationExpiryWorker({
+				logger: {
+					warn: (msg) => {
+						duplicateWarned = true
+						assert.match(msg, /Worker is already running/)
+					},
+				},
+			})
+
+			assert.strictEqual(duplicateWarned, true)
+			assert.strictEqual(duplicateWorker.isRunning(), true)
+
+			// Allow boot sweep microtask to resolve
+			await new Promise((r) => setTimeout(r, 50))
+			assert.strictEqual(sweepCount, 1, 'Boot sweep must have executed.')
+
+			await worker.stop()
+		})
+	})
+
+	// =========================================================================
+	// 17. Graceful Stop & In-Flight Drain
+	// =========================================================================
+	describe('17. Graceful Stop & In-Flight Drain', () => {
+		it('should wait for in-flight sweep to drain completely before resolving stop', async () => {
+			let sweepFinished = false
+			BloodUnit.find = () => {
+				return {
+					sort() {
+						return this
+					},
+					limit() {
+						return new Promise((resolve) => {
+							setTimeout(() => {
+								sweepFinished = true
+								resolve([])
+							}, 60)
+						})
+					},
+				}
+			}
+
+			const worker = startReservationExpiryWorker({
+				intervalMs: 10000,
+				runOnBoot: false,
+				logger: { info: () => {}, warn: () => {} },
+			})
+
+			// Launch tick in background
+			const tickPromise = worker.runOnce()
+
+			// Immediately issue stop with drain
+			const stopPromise = stopReservationExpiryWorker({ drain: true, timeoutMs: 1000 })
+
+			assert.strictEqual(sweepFinished, false, 'Sweep is still in flight.')
+			await stopPromise
+			assert.strictEqual(sweepFinished, true, 'Worker stop must have awaited the in-flight drain.')
+			assert.strictEqual(worker.isRunning(), false)
+
+			await tickPromise
+		})
+
+		it('should be completely idempotent when stop is called repeatedly', async () => {
+			const res1 = await stopReservationExpiryWorker()
+			const res2 = await stopReservationExpiryWorker()
+			assert.strictEqual(res1, true)
+			assert.strictEqual(res2, true)
+		})
+	})
+
+	// =========================================================================
+	// 18. Operational Recovery After Accumulated Offline Holds
+	// =========================================================================
+	describe('18. Operational Recovery After Accumulated Offline Holds', () => {
+		it('should recover all accumulated expired holds in bounded batches upon server reboot', async () => {
+			const now = new Date()
+			// Simulate 3 holds that expired while the system was offline
+			const offlineExpired1 = createUnitDoc()
+			const offlineExpired2 = createUnitDoc()
+			const offlineExpired3 = createUnitDoc()
+
+			BloodUnit.find = () => mockChainableFind([offlineExpired1, offlineExpired2, offlineExpired3])
+			BloodUnit.findOne = async (filter) => {
+				if (filter._id.toString() === offlineExpired1._id.toString()) return offlineExpired1
+				if (filter._id.toString() === offlineExpired2._id.toString()) return offlineExpired2
+				if (filter._id.toString() === offlineExpired3._id.toString()) return offlineExpired3
+				return null
+			}
+
+			// Worker boots up after downtime with runOnBoot: true
+			const worker = startReservationExpiryWorker({
+				intervalMs: 60000,
+				batchSize: 100,
+				runOnBoot: true,
+				logger: { info: () => {}, warn: () => {} },
+			})
+
+			// Allow boot sweep to complete
+			await new Promise((r) => setTimeout(r, 60))
+
+			const status = getWorkerStatus()
+			assert.strictEqual(status.metrics.totalRuns, 1)
+			assert.strictEqual(status.metrics.totalProcessedCount, 3)
+			assert.strictEqual(status.metrics.totalReleasedCount, 3)
+			assert.strictEqual(offlineExpired1.status, 'Available')
+			assert.strictEqual(offlineExpired2.status, 'Available')
+			assert.strictEqual(offlineExpired3.status, 'Available')
+
+			await worker.stop()
 		})
 	})
 })

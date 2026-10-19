@@ -405,11 +405,21 @@ async function releaseReservationForRequest({
 	}
 }
 
-const { processExpiredReservations } = require('./reservationExpiryWorker')
+const {
+	processExpiredReservations,
+	parseWorkerConfig,
+	startReservationExpiryWorker,
+	stopReservationExpiryWorker,
+	getWorkerStatus,
+} = require('./reservationExpiryWorker')
 
 module.exports = {
 	findEligibleUnitsFEFO,
 	reserveUnitsForRequest,
 	releaseReservationForRequest,
 	processExpiredReservations,
+	parseWorkerConfig,
+	startReservationExpiryWorker,
+	stopReservationExpiryWorker,
+	getWorkerStatus,
 }

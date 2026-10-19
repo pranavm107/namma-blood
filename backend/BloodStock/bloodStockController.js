@@ -1,14 +1,20 @@
 const catchAsync = require('../Utils/catchAsync')
 const Bloodstock = require('./bloodStockModel')
+const stockService = require('./stockService')
 
 const addStock = catchAsync(async (id) => {
 	await Bloodstock.create({ bloodbankId: id })
 })
 
+/**
+ * Returns consolidated blood stock for the authenticated blood bank.
+ * Preserves top-level A_Positive .. O_Negative integers for 100% backward compatibility with
+ * existing frontend Redux consumers, while providing explicit demarcation between verified
+ * issue-eligible traceable units and unverified legacy aggregate numbers.
+ */
 const getStock = catchAsync(async (req, res) => {
-	const bloodStock = await Bloodstock.findOne({ bloodbankId: req.user._id })
-
-	return res.status(200).json(bloodStock)
+	const stockData = await stockService.getConsolidatedStock(req.user._id)
+	return res.status(200).json(stockData)
 })
 
 const checkAvailability = async (bloodbankId, bloodType, unit = 1, options = {}) => {
@@ -18,6 +24,16 @@ const checkAvailability = async (bloodbankId, bloodType, unit = 1, options = {})
 	return (bloodstock[bloodType] || 0) >= validUnits
 }
 
+/**
+ * LEGACY AGGREGATE MODIFIER (PRESERVED FOR BACKWARD COMPATIBILITY)
+ *
+ * SAFETY INVARIANT:
+ * This endpoint mutates ONLY the legacy Bloodstock aggregate counter document.
+ * It NEVER mutates BloodUnit records and CANNOT falsely create verified or issue-eligible units.
+ * Direct scalar delta modification bypasses infectious disease testing, component tracking,
+ * and bag verification. It is scheduled for deprecation in Phase 3.4 once all centers complete
+ * physical unit migration.
+ */
 const updatStock = catchAsync(async (req, res) => {
 	const currentStock = await Bloodstock.findOne({
 		bloodbankId: req.user._id,
@@ -89,4 +105,5 @@ module.exports = {
 	checkAvailability,
 	increaseStock,
 	decreaseStock,
+	stockService,
 }

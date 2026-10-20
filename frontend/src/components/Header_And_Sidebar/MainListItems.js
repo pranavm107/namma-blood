@@ -10,6 +10,8 @@ import ContactsIcon from '@mui/icons-material/Contacts'
 import HomeIcon from '@mui/icons-material/Home'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import BiotechIcon from '@mui/icons-material/Biotech'
+import SecurityIcon from '@mui/icons-material/Security'
 import { useDispatch, useSelector } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import LogoutIcon from '@mui/icons-material/Logout'
@@ -61,6 +63,14 @@ const MainListItems = () => {
 
 	const stockHandler = () => {
 		navigate('/bloodbank/stock')
+	}
+
+	const inventoryHandler = () => {
+		navigate('/bloodbank/inventory')
+	}
+
+	const reconciliationHandler = () => {
+		navigate('/bloodbank/reconciliation')
 	}
 
 	const aboutusHandler = () => {
@@ -240,13 +250,31 @@ const MainListItems = () => {
 						<ListItemText primary='Receive requests' />
 					</ListItemButton>
 					<ListItemButton
+						onClick={inventoryHandler}
+						selected={url[2] === 'inventory'}
+					>
+						<ListItemIcon>
+							<BiotechIcon />
+						</ListItemIcon>
+						<ListItemText primary='Traceable Inventory' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={reconciliationHandler}
+						selected={url[2] === 'reconciliation'}
+					>
+						<ListItemIcon>
+							<SecurityIcon />
+						</ListItemIcon>
+						<ListItemText primary='Reconciliation' />
+					</ListItemButton>
+					<ListItemButton
 						onClick={stockHandler}
 						selected={url[2] === 'stock'}
 					>
 						<ListItemIcon>
 							<Inventory2Icon />
 						</ListItemIcon>
-						<ListItemText primary='Stock' />
+						<ListItemText primary='Legacy Stock' />
 					</ListItemButton>
 					{/* <ListItemButton
 						onClick={contactusHandler}

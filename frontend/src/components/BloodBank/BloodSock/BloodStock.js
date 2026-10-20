@@ -10,8 +10,11 @@ import {
 	DialogTitle,
 	Grid,
 	TextField,
+	Alert,
+	Chip,
 } from '@mui/material'
 import Paper from '@mui/material/Paper'
+import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import BloodTypeDropdown from '../../UI/BloodTypeDropdown'
 import { getBloodStock, updateStock } from '../../../store/stockSlice'
@@ -31,6 +34,7 @@ const Item = styled(Paper)(({ theme }) => ({
 
 const BloodStock = () => {
 	const dispatch = useDispatch()
+	const navigate = useNavigate()
 	const { stock, isLoading } = useSelector((state) => state?.stock)
 	const [open, setOpen] = useState(false)
 	const [bloodType, setBloodType] = useState('')
@@ -91,19 +95,49 @@ const BloodStock = () => {
 
 	return (
 		<>
-			<Grid container spacing={2} columns={12}>
+			{/* Unverified Aggregate Stock Demarcation Banner */}
+			<Alert
+				severity='warning'
+				sx={{ mb: 3 }}
+				action={
+					<Box sx={{ display: 'flex', gap: 1 }}>
+						<Button
+							color='inherit'
+							size='small'
+							variant='outlined'
+							onClick={() => navigate('/bloodbank/inventory')}
+						>
+							Traceable Units
+						</Button>
+						<Button
+							color='inherit'
+							size='small'
+							variant='outlined'
+							onClick={() => navigate('/bloodbank/reconciliation')}
+						>
+							Reconciliation
+						</Button>
+					</Box>
+				}
+			>
+				<strong>UNVERIFIED LEGACY AGGREGATE STOCK:</strong> The counts below reflect legacy whole-blood aggregate estimates. They lack individual DIN barcodes, mandatory 5-panel TTI screening, and Medical Officer clearance. <strong>Never issue unverified stock to patients.</strong> Use the <strong>Reconciliation Console</strong> to audit and migrate aggregate stock into traceable units.
+			</Alert>
+
+			<Grid container spacing={2} columns={12} alignItems='center' sx={{ mb: 2 }}>
 				<Grid item xs={10}>
-					<h1 style={{ color: '#ff0000' }}>Donor Requests</h1>
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+						<h1 style={{ color: '#b45309', margin: 0 }}>Legacy Blood Stock</h1>
+						<Chip label='Unverified Aggregate' color='warning' size='small' variant='outlined' />
+					</Box>
 				</Grid>
 				<Grid item xs={2}>
-					<h1>
-						<Button
-							variant='contained'
-							onClick={() => setOpen(true)}
-						>
-							Add Stock
-						</Button>
-					</h1>
+					<Button
+						variant='contained'
+						color='primary'
+						onClick={() => setOpen(true)}
+					>
+						Update Stock
+					</Button>
 				</Grid>
 			</Grid>
 

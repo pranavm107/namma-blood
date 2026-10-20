@@ -17,6 +17,8 @@ import { useNavigate } from 'react-router-dom'
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism'
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import BiotechIcon from '@mui/icons-material/Biotech'
+import SecurityIcon from '@mui/icons-material/Security'
 import { getBloodbankDonateStates } from '../../store/donateStatesSlice'
 import { getBloodbankReceiveStates } from '../../store/receiveStatesSlice'
 
@@ -233,6 +235,136 @@ const BloodbankHome = () => {
 								}}
 							>
 								View All Patient Requests
+							</Button>
+						</CardActions>
+					</Card>
+				</Grid>
+
+				{/* Traceable Blood Inventory */}
+				<Grid item xs={12} md={6}>
+					<Card
+						elevation={0}
+						sx={{
+							borderRadius: 3,
+							border: '1px solid #e2e8f0',
+							backgroundColor: '#ffffff',
+							boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent sx={{ p: 3 }}>
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+								<Box
+									sx={{
+										width: 44,
+										height: 44,
+										borderRadius: 2,
+										backgroundColor: '#ecfdf5',
+										color: '#16a34a',
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+									}}
+								>
+									<BiotechIcon />
+								</Box>
+								<Box>
+									<Typography variant='h6' sx={{ fontWeight: 800, color: '#1e293b' }}>
+										Traceable Blood Units & Screening
+									</Typography>
+									<Typography variant='caption' sx={{ color: '#64748b' }}>
+										DIN tracking, TTI testing, Medical Officer clearance & discard
+									</Typography>
+								</Box>
+							</Box>
+							<Typography variant='body2' sx={{ color: '#475569', mb: 2 }}>
+								Full clinical lifecycle controls for traceable barcoded units: mandatory 5-panel TTI screening, verified MO clearance, crossmatch compatibility, and auditable biohazard discard.
+							</Typography>
+						</CardContent>
+
+						<Divider />
+						<CardActions sx={{ p: 2 }}>
+							<Button
+								fullWidth
+								variant='text'
+								endIcon={<ArrowForwardIcon />}
+								onClick={() => navigate('/bloodbank/inventory')}
+								sx={{
+									color: '#16a34a',
+									fontWeight: 700,
+									textTransform: 'none',
+									'&:hover': { backgroundColor: '#f0fdf4' },
+								}}
+							>
+								Open Traceable Inventory
+							</Button>
+						</CardActions>
+					</Card>
+				</Grid>
+
+				{/* Legacy Reconciliation Console */}
+				<Grid item xs={12} md={6}>
+					<Card
+						elevation={0}
+						sx={{
+							borderRadius: 3,
+							border: '1px solid #e2e8f0',
+							backgroundColor: '#ffffff',
+							boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent sx={{ p: 3 }}>
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+								<Box
+									sx={{
+										width: 44,
+										height: 44,
+										borderRadius: 2,
+										backgroundColor: '#fffbeb',
+										color: '#b45309',
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+									}}
+								>
+									<SecurityIcon />
+								</Box>
+								<Box>
+									<Typography variant='h6' sx={{ fontWeight: 800, color: '#1e293b' }}>
+										Reconciliation & Safe Migration
+									</Typography>
+									<Typography variant='caption' sx={{ color: '#64748b' }}>
+										Dry-run audit, discrepancy detection & atomic migration
+									</Typography>
+								</Box>
+							</Box>
+							<Typography variant='body2' sx={{ color: '#475569', mb: 2 }}>
+								Safely audit unverified aggregate stock against barcoded inventory. Simulate dry-runs and execute transactional conversions into quarantined traceable units.
+							</Typography>
+						</CardContent>
+
+						<Divider />
+						<CardActions sx={{ p: 2 }}>
+							<Button
+								fullWidth
+								variant='text'
+								endIcon={<ArrowForwardIcon />}
+								onClick={() => navigate('/bloodbank/reconciliation')}
+								sx={{
+									color: '#b45309',
+									fontWeight: 700,
+									textTransform: 'none',
+									'&:hover': { backgroundColor: '#fefce8' },
+								}}
+							>
+								Open Reconciliation Console
 							</Button>
 						</CardActions>
 					</Card>

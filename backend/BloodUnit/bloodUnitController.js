@@ -2,8 +2,15 @@ const mongoose = require('mongoose')
 const catchAsync = require('../Utils/catchAsync')
 const AppError = require('../Utils/appError')
 const { withTransaction } = require('../Utils/transactionHelper')
-const { BloodUnit, MANDATORY_TTI_TESTS } = require('./bloodUnitModel')
-const { recordAuditLog } = require('./bloodUnitAuditModel')
+const {
+	BloodUnit,
+	MANDATORY_TTI_TESTS,
+	VALID_BLOOD_GROUPS,
+	VALID_STATUSES,
+	VALID_COMPONENT_TYPES,
+} = require('./bloodUnitModel')
+const { BloodUnitAuditLog, recordAuditLog } = require('./bloodUnitAuditModel')
+
 const {
 	reserveUnitsForRequest,
 	releaseReservationForRequest,
@@ -330,18 +337,33 @@ const recordScreeningResults = catchAsync(async (req, res, next) => {
 })
 
 /**
- * Retrieves a blood unit by ID or DIN for the authenticated blood bank.
+ * Retrieves a blood unit by ID or DIN for the authenticated blood bank or staff member.
  * Strips sensitive donor PII to preserve least privilege and patient confidentiality.
+ * Includes complete clinical lifecycle, reservation, issuance, and audit trail metadata.
  */
 const getBloodUnitById = catchAsync(async (req, res, next) => {
 	const { id } = req.params
+	const bloodbankId = req.bloodbankId || req.user?._id
 
-	const unit = await findOwnedBloodUnit(id, req.user._id)
+	const unit = await findOwnedBloodUnit(id, bloodbankId)
 	if (!unit) {
 		return res.status(404).json({
 			message: 'Blood unit not found.',
 		})
 	}
+
+	let auditHistory = []
+	if (mongoose.connection && mongoose.connection.readyState === 1) {
+		try {
+			auditHistory = await BloodUnitAuditLog.find({ unitId: unit._id })
+				.sort({ timestamp: -1 })
+				.limit(50)
+				.lean()
+		} catch (e) {
+			// fallback if audit log query fails
+		}
+	}
+
 
 	return res.status(200).json({
 		_id: unit._id,
@@ -355,11 +377,110 @@ const getBloodUnitById = catchAsync(async (req, res, next) => {
 		storageLocation: unit.storageLocation,
 		testing: unit.testing,
 		clearance: unit.clearance,
+		reservation: unit.reservation,
+		issuance: unit.issuance,
+		discard: unit.discard,
 		isLegacyMigrated: unit.isLegacyMigrated,
+		isIssueEligible: typeof unit.isIssueEligible === 'function' ? unit.isIssueEligible() : false,
+		auditHistory,
 		createdAt: unit.createdAt,
 		updatedAt: unit.updatedAt,
 	})
 })
+
+/**
+ * Searches and lists traceable blood units for the authenticated blood bank.
+ * Supports filtering by blood group, component type, lifecycle status, screening status, expiry, and search query.
+ */
+const getBloodUnits = catchAsync(async (req, res, next) => {
+	const bloodbankId = req.bloodbankId || req.user?._id
+	if (!bloodbankId) {
+		return res.status(401).json({
+			message: 'Authentication required: Owning blood bank ID is missing.',
+		})
+	}
+
+	const {
+		q,
+		search,
+		bloodGroup,
+		status,
+		componentType,
+		screeningStatus,
+		isExpired,
+		page = 1,
+		limit = 10,
+		sortBy = 'createdAt',
+		sortOrder = 'desc',
+	} = req.query
+
+	const query = { bloodbankId: new mongoose.Types.ObjectId(bloodbankId) }
+
+	const searchTerm = (q || search || '').trim()
+	if (searchTerm) {
+		query.unitNumber = { $regex: searchTerm, $options: 'i' }
+	}
+
+	if (bloodGroup && VALID_BLOOD_GROUPS.includes(bloodGroup)) {
+		query.bloodGroup = bloodGroup
+	}
+
+	if (status && VALID_STATUSES.includes(status)) {
+		query.status = status
+	}
+
+	if (componentType && VALID_COMPONENT_TYPES.includes(componentType)) {
+		query.componentType = componentType
+	}
+
+	if (screeningStatus) {
+		if (screeningStatus === 'Reactive') {
+			query.$or = MANDATORY_TTI_TESTS.map((test) => ({
+				[`testing.${test}`]: 'Reactive',
+			}))
+		} else if (screeningStatus === 'Non_Reactive') {
+			for (const test of MANDATORY_TTI_TESTS) {
+				query[`testing.${test}`] = 'Non_Reactive'
+			}
+		} else if (screeningStatus === 'Pending') {
+			query.$or = MANDATORY_TTI_TESTS.map((test) => ({
+				[`testing.${test}`]: 'Pending',
+			}))
+		}
+	}
+
+	if (isExpired === 'true') {
+		query.expiryDate = { $lte: new Date() }
+	} else if (isExpired === 'false') {
+		query.expiryDate = { $gt: new Date() }
+	}
+
+	const pageNum = Math.max(1, parseInt(page, 10) || 1)
+	const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10))
+	const skip = (pageNum - 1) * limitNum
+
+	const sortDirection = sortOrder === 'asc' ? 1 : -1
+	const sortOptions = { [sortBy]: sortDirection }
+
+	const [units, total] = await Promise.all([
+		BloodUnit.find(query)
+			.select('-donorUserId -donationRequestId')
+			.sort(sortOptions)
+			.skip(skip)
+			.limit(limitNum)
+			.lean(),
+		BloodUnit.countDocuments(query),
+	])
+
+	return res.status(200).json({
+		units,
+		total,
+		page: pageNum,
+		limit: limitNum,
+		totalPages: Math.ceil(total / limitNum) || 1,
+	})
+})
+
 
 /**
  * Medical Officer Quality Verification and Clinical Clearance Endpoint.
@@ -1186,6 +1307,7 @@ const discardBloodUnit = catchAsync(async (req, res, next) => {
 module.exports = {
 	recordScreeningResults,
 	getBloodUnitById,
+	getBloodUnits,
 	findOwnedBloodUnit,
 	verifyBloodUnitClearance,
 	reserveBloodUnits,

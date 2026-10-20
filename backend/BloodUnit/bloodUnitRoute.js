@@ -2,6 +2,7 @@ const express = require('express')
 const {
 	recordScreeningResults,
 	getBloodUnitById,
+	getBloodUnits,
 	verifyBloodUnitClearance,
 	reserveBloodUnits,
 	releaseBloodUnitReservation,
@@ -10,8 +11,6 @@ const {
 	dispatchBloodUnits,
 	discardBloodUnit,
 } = require('./bloodUnitController')
-const { selectBloodbankModel } = require('../Common/Middlewares/selectModels')
-const { protect } = require('../Login_And_Authentication/authMiddleware')
 const {
 	protectStaff,
 	restrictToStaffRole,
@@ -19,6 +18,14 @@ const {
 } = require('../BloodBank/bloodbankStaffMiddleware')
 
 const router = express.Router()
+
+// List and filter blood units for authenticated blood bank / staff
+router
+	.route('/')
+	.get(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		getBloodUnits
+	)
 
 // Final clinical unit issuance
 router
@@ -78,8 +85,14 @@ router
 // Record TTI laboratory screening results for a unit
 router
 	.route('/:id/tests')
-	.post(selectBloodbankModel, protect, recordScreeningResults)
-	.patch(selectBloodbankModel, protect, recordScreeningResults)
+	.post(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		recordScreeningResults
+	)
+	.patch(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		recordScreeningResults
+	)
 
 // Medical Officer quality verification & availability clearance
 router
@@ -87,6 +100,11 @@ router
 	.post(protectStaff, restrictToStaffRole('Medical_Officer'), verifyBloodUnitClearance)
 
 // Inspect unit details & testing status
-router.route('/:id').get(selectBloodbankModel, protect, getBloodUnitById)
+router
+	.route('/:id')
+	.get(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		getBloodUnitById
+	)
 
 module.exports = router

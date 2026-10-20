@@ -9,6 +9,8 @@ import donateStatesSlice from './donateStatesSlice'
 import receiveStatesSlice from './receiveStatesSlice'
 import bloodStockSlice from './stockSlice'
 import contactUsSlice from './contactUsSlice'
+import bloodUnitSlice from './bloodUnitSlice'
+import reconciliationSlice from './reconciliationSlice'
 
 const store = configureStore({
 	reducer: {
@@ -22,7 +24,10 @@ const store = configureStore({
 		receivestates: receiveStatesSlice,
 		stock: bloodStockSlice,
 		contactus: contactUsSlice,
+		bloodUnit: bloodUnitSlice,
+		reconciliation: reconciliationSlice,
 	},
 })
+
 
 export default store

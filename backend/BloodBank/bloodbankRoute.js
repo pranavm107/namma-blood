@@ -14,6 +14,7 @@ const {
 	selectAdminModel,
 } = require('../Common/Middlewares/selectModels')
 const { protect } = require('../Login_And_Authentication/authMiddleware')
+const { protectBloodbankOrStaff } = require('./bloodbankStaffMiddleware')
 const {
 	updatePasswordMiddleware,
 	updatePassword,
@@ -28,7 +29,12 @@ router.use(selectBloodbankModel)
 
 router.route('/login').post(loginMiddleware, login)
 
-router.route('/getbloodbankprofile').get(protect, getBloodbankProfile)
+router
+	.route('/getbloodbankprofile')
+	.get(
+		protectBloodbankOrStaff('Staff_Admin', 'Medical_Officer', 'Lab_Technician'),
+		getBloodbankProfile
+	)
 
 router.route('/getbloodbanks').get(getBloodbanks)
 

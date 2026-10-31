@@ -24,7 +24,7 @@ const ForgotPassword = () => {
 	const forgotPasswordHandler = async (event) => {
 		event.preventDefault()
 
-		if (!/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$/.test(email)) {
+		if (!/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
 			setEmailError('Invalid Email address.')
 			return
 		}

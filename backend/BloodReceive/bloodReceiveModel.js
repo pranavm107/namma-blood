@@ -44,6 +44,12 @@ const schema = new mongoose.Schema(
 		message: {
 			type: String,
 		},
+		reservedUnitIds: [
+			{
+				type: mongoose.Schema.Types.ObjectId,
+				ref: 'bloodunit',
+			},
+		],
 	},
 	{ timestamps: true }
 )

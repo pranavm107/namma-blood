@@ -26,6 +26,8 @@ import AddBloodbank from './Admin/AddBloodbank'
 import BulkImport from './Admin/BulkImport'
 import ForgotPassword from './Auth/ForgotPassword'
 import ResetPassword from './Auth/ResetPassword'
+import TraceableInventoryDashboard from './BloodBank/TraceableInventory/TraceableInventoryDashboard'
+import ReconciliationDashboard from './BloodBank/Reconciliation/ReconciliationDashboard'
 
 const MainRoute = () => {
 	const location = useLocation()
@@ -114,6 +116,14 @@ const MainRoute = () => {
 											<Route
 												path='stock'
 												element={<BloodStock />}
+											/>
+											<Route
+												path='inventory'
+												element={<TraceableInventoryDashboard />}
+											/>
+											<Route
+												path='reconciliation'
+												element={<ReconciliationDashboard />}
 											/>
 											<Route
 												path='aboutus'

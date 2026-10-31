@@ -34,7 +34,7 @@ const ContactUs = () => {
 			toast.error('Please enter your email address')
 			return false
 		}
-		if (!/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$/.test(email)) {
+		if (!/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
 			toast.error('Please enter a valid email address')
 			return false
 		}

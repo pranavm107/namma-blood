@@ -108,6 +108,37 @@ export const getBloodbankProfile = createAsyncThunk(
 	}
 )
 
+export const loginStaff = createAsyncThunk(
+	'login/loginStaff',
+	async (credentials, { rejectWithValue }) => {
+		try {
+			const response = await axios.post(
+				`${BASE_URL}/bloodbank/staff/login`,
+				credentials
+			)
+			const LoggedInUserData = {
+				isLoggedin: true,
+				token: response?.data.token,
+				isLoading: false,
+				role: 'BLOODBANK',
+				isStaff: true,
+				staffRole: response?.data.staff?.role,
+				user: {
+					...response?.data.staff,
+					isStaff: true,
+					staffRole: response?.data.staff?.role,
+				},
+				error: null,
+			}
+			localStorage.setItem('loginData', JSON.stringify(LoggedInUserData))
+
+			return response?.data
+		} catch (error) {
+			return rejectWithValue(error?.response?.data)
+		}
+	}
+)
+
 export const loginAdmin = createAsyncThunk(
 	'login/loginAdmin',
 	async (user, { rejectWithValue }) => {
@@ -227,11 +258,44 @@ const loginSlice = createSlice({
 			.addCase(getBloodbankProfile.fulfilled, (state, action) => {
 				return {
 					...state,
-					user: action?.payload,
+					user: {
+						...state.user,
+						...action?.payload,
+					},
 					isLoading: false,
 				}
 			})
 			.addCase(getBloodbankProfile.rejected, (state, action) => {
+				return {
+					...state,
+					isLoading: false,
+					error: action?.payload?.message,
+				}
+			})
+			.addCase(loginStaff.pending, (state) => {
+				return {
+					...state,
+					isLoading: true,
+				}
+			})
+			.addCase(loginStaff.fulfilled, (state, action) => {
+				return {
+					...state,
+					isLoading: false,
+					isLoggedin: true,
+					token: action?.payload?.token,
+					role: 'BLOODBANK',
+					isStaff: true,
+					staffRole: action?.payload?.staff?.role,
+					user: {
+						...action?.payload?.staff,
+						isStaff: true,
+						staffRole: action?.payload?.staff?.role,
+					},
+					error: null,
+				}
+			})
+			.addCase(loginStaff.rejected, (state, action) => {
 				return {
 					...state,
 					isLoading: false,

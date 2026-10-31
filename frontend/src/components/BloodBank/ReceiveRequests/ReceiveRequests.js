@@ -39,8 +39,9 @@ const ReceiveRequests = () => {
 	)
 	const [stage, setStage] = useState('')
 	const [id, setId] = useState('')
-	const [unit, setUnit] = useState(0)
+	const [unit, setUnit] = useState(1)
 	const [status, setStatus] = useState('')
+	const [crossmatchResult, setCrossmatchResult] = useState('Compatible')
 	const { receiveRequests, isLoading } = useSelector(
 		(state) => state?.receiverequests
 	)
@@ -49,11 +50,15 @@ const ReceiveRequests = () => {
 		dispatch(getReceiveBloodbankDataQuery('All'))
 	}, [dispatch])
 
-	const handleClickAcceptedOpen = (id, status, unit) => {
+	const handleClickAcceptedOpen = (id, status, unit, bloodType) => {
 		setAcceptedOpen(true)
 		setId(id)
 		setStatus(status)
-		setUnit(unit)
+		setUnit(unit || 1)
+		if (bloodType) {
+			setBloodType(bloodType)
+		}
+		setCrossmatchResult('Compatible')
 	}
 
 	const handleAcceptedClose = () => {
@@ -100,8 +105,8 @@ const ReceiveRequests = () => {
 	}
 
 	const validateInput = () => {
-		if (unit === 0) {
-			toast.error('Enter how many unit receiver can took.')
+		if (!unit || Number(unit) < 1) {
+			toast.error('Enter valid unit count of at least 1.')
 			return false
 		}
 		if (!bloodType) {
@@ -120,7 +125,8 @@ const ReceiveRequests = () => {
 						id,
 						whenDoYouWant,
 						bloodType,
-						unit: 1,
+						unit: Number(unit) || 1,
+						crossmatchResult,
 					})
 				)
 				if (response?.meta?.requestStatus === 'fulfilled') {
@@ -261,7 +267,8 @@ const ReceiveRequests = () => {
 															handleClickAcceptedOpen(
 																data?._id,
 																data?.status,
-																data?.unit
+																data?.unit,
+																data?.bloodType
 															)
 														}
 													>
@@ -292,7 +299,7 @@ const ReceiveRequests = () => {
 				<DialogTitle>Select any one option</DialogTitle>
 				<DialogContent>
 					<DialogContentText>
-						Are you sure you want to accept or reject reqquest
+						Are you sure you want to accept or reject request?
 					</DialogContentText>
 				</DialogContent>
 				<DialogActions>
@@ -303,11 +310,10 @@ const ReceiveRequests = () => {
 			</Dialog>
 
 			<Dialog open={acceptedOpen} onClose={handleAcceptedClose}>
-				<DialogTitle>Fullfiled Receive Request</DialogTitle>
+				<DialogTitle>Fulfill Receive Request</DialogTitle>
 				<DialogContent>
-					<DialogContentText>
-						Select a date when you want to call the donor to donate
-						blood
+					<DialogContentText sx={{ mb: 2 }}>
+						Confirm patient blood group, required units, and crossmatch compatibility before clinical fulfillment.
 					</DialogContentText>
 					<TextField
 						sx={{ mb: 3 }}
@@ -316,15 +322,15 @@ const ReceiveRequests = () => {
 						margin='dense'
 						id='date'
 						name='date'
-						label='Date'
+						label='Fulfillment Date'
 						type='date'
 						onChange={(e) => setWhenDoYouWant(e.target.value)}
-						value={new Date().toJSON().slice(0, 10)}
+						value={whenDoYouWant}
 					/>
 					<TextField
 						sx={{ mb: 3 }}
 						fullWidth
-						label='How many Unit you want'
+						label='Units Required'
 						id='unit'
 						name='unit'
 						type='number'
@@ -335,11 +341,28 @@ const ReceiveRequests = () => {
 						title='Blood Type'
 						bloodtypeData={setBloodtypeDataHandler}
 					/>
+					<TextField
+						sx={{ mt: 3, mb: 1 }}
+						select
+						fullWidth
+						label='Crossmatch Compatibility'
+						id='crossmatchResult'
+						name='crossmatchResult'
+						value={crossmatchResult}
+						onChange={(e) => setCrossmatchResult(e.target.value)}
+						SelectProps={{
+							native: true,
+						}}
+					>
+						<option value='Compatible'>Compatible (Issue-Eligible)</option>
+						<option value='Incompatible'>Incompatible (Compatibility Failed)</option>
+						<option value='Emergency_Uncrossmatched'>Emergency Uncrossmatched (MO Authorized)</option>
+					</TextField>
 				</DialogContent>
 				<DialogActions>
 					<Button onClick={handleAcceptedClose}>Cancel</Button>
 					<Button onClick={handleReject}>Reject Request</Button>
-					<Button onClick={handleSubmit}>Accept Response</Button>
+					<Button onClick={handleSubmit} variant='contained' color='primary'>Fulfill Request</Button>
 				</DialogActions>
 			</Dialog>
 		</>

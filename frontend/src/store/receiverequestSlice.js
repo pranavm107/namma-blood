@@ -149,7 +149,11 @@ export const fulfilledReceiveRequest = createAsyncThunk(
 					id: data?.id,
 					whenDoYouWant: data?.whenDoYouWant,
 					bloodType: data?.bloodType,
-					unit: 1,
+					unit: data?.unit !== undefined ? Number(data?.unit) : 1,
+					crossmatchResult: data?.crossmatchResult || 'Compatible',
+					recipientPatientName: data?.recipientPatientName,
+					hospitalName: data?.hospitalName,
+					dispatchNotes: data?.dispatchNotes,
 				},
 				{
 					headers: {

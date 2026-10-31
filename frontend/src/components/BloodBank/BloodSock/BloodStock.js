@@ -10,8 +10,11 @@ import {
 	DialogTitle,
 	Grid,
 	TextField,
+	Alert,
+	Chip,
 } from '@mui/material'
 import Paper from '@mui/material/Paper'
+import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import BloodTypeDropdown from '../../UI/BloodTypeDropdown'
 import { getBloodStock, updateStock } from '../../../store/stockSlice'
@@ -31,6 +34,7 @@ const Item = styled(Paper)(({ theme }) => ({
 
 const BloodStock = () => {
 	const dispatch = useDispatch()
+	const navigate = useNavigate()
 	const { stock, isLoading } = useSelector((state) => state?.stock)
 	const [open, setOpen] = useState(false)
 	const [bloodType, setBloodType] = useState('')
@@ -53,9 +57,17 @@ const BloodStock = () => {
 		setError('')
 	}
 
+	const getDisplayStock = (bg) => {
+		if (stock?.legacyUnverifiedStock && typeof stock.legacyUnverifiedStock[bg] === 'number') {
+			return stock.legacyUnverifiedStock[bg]
+		}
+		return stock?.[bg] ?? 0
+	}
+
 	const onStockChangeHandler = (e) => {
 		if (bloodType !== '') {
-			if (stock[bloodType] + Number(e.target.value) >= 0) {
+			const currentCount = getDisplayStock(bloodType)
+			if (currentCount + Number(e.target.value) >= 0) {
 				setError('')
 				setUnit(e.target.value)
 			} else {
@@ -91,19 +103,55 @@ const BloodStock = () => {
 
 	return (
 		<>
-			<Grid container spacing={2} columns={12}>
+			{/* Unverified Aggregate Stock Demarcation Banner */}
+			<Alert
+				severity='warning'
+				sx={{ mb: 3 }}
+				action={
+					<Box sx={{ display: 'flex', gap: 1 }}>
+						<Button
+							color='inherit'
+							size='small'
+							variant='outlined'
+							onClick={() => navigate('/bloodbank/inventory')}
+						>
+							Traceable Units
+						</Button>
+						<Button
+							color='inherit'
+							size='small'
+							variant='outlined'
+							onClick={() => navigate('/bloodbank/reconciliation')}
+						>
+							Reconciliation
+						</Button>
+					</Box>
+				}
+			>
+				<strong>UNVERIFIED LEGACY AGGREGATE STOCK:</strong> The counts below reflect legacy whole-blood aggregate estimates. They lack individual DIN barcodes, mandatory 5-panel TTI screening, and Medical Officer clearance. <strong>Never issue unverified stock to patients.</strong> Use the <strong>Reconciliation Console</strong> to audit and migrate aggregate stock into traceable units.
+			</Alert>
+
+			{stock?.inventoryClassification === 'HYBRID_TRANSITIONAL' && (
+				<Alert severity='info' sx={{ mb: 2 }}>
+					<strong>Transitional Inventory Notice:</strong> Displaying raw unverified legacy aggregate numbers below. Verified traceable units ({stock?.traceableVerifiedStock?.A_Positive ?? 0} A+, {stock?.traceableVerifiedStock?.O_Positive ?? 0} O+) are tracked separately in the <strong>Traceable Units</strong> console.
+				</Alert>
+			)}
+
+			<Grid container spacing={2} columns={12} alignItems='center' sx={{ mb: 2 }}>
 				<Grid item xs={10}>
-					<h1 style={{ color: '#ff0000' }}>Donor Requests</h1>
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+						<h1 style={{ color: '#b45309', margin: 0 }}>Legacy Blood Stock</h1>
+						<Chip label='Unverified Aggregate' color='warning' size='small' variant='outlined' />
+					</Box>
 				</Grid>
 				<Grid item xs={2}>
-					<h1>
-						<Button
-							variant='contained'
-							onClick={() => setOpen(true)}
-						>
-							Add Stock
-						</Button>
-					</h1>
+					<Button
+						variant='contained'
+						color='primary'
+						onClick={() => setOpen(true)}
+					>
+						Update Stock
+					</Button>
 				</Grid>
 			</Grid>
 
@@ -118,28 +166,28 @@ const BloodStock = () => {
 						columnSpacing={{ xs: 1, sm: 2, md: 3 }}
 					>
 						<Grid item xs={3}>
-							<Item>A+ : {stock?.A_Positive}</Item>
+							<Item>A+ : {getDisplayStock('A_Positive')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>A- : {stock?.A_Negative}</Item>
+							<Item>A- : {getDisplayStock('A_Negative')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>B+ : {stock?.B_Positive}</Item>
+							<Item>B+ : {getDisplayStock('B_Positive')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>B- : {stock?.B_Negative}</Item>
+							<Item>B- : {getDisplayStock('B_Negative')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>AB+ : {stock?.AB_Positive}</Item>
+							<Item>AB+ : {getDisplayStock('AB_Positive')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>AB- : {stock?.AB_Negative}</Item>
+							<Item>AB- : {getDisplayStock('AB_Negative')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>O+ : {stock?.O_Positive}</Item>
+							<Item>O+ : {getDisplayStock('O_Positive')}</Item>
 						</Grid>
 						<Grid item xs={3}>
-							<Item>O- : {stock?.O_Negative}</Item>
+							<Item>O- : {getDisplayStock('O_Negative')}</Item>
 						</Grid>
 					</Grid>
 				</Box>

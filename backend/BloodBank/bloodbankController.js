@@ -159,7 +159,20 @@ const getBloodbankProfile = catchAsync(async (req, res) => {
 		})
 	}
 
-	return res.status(200).json(user)
+	const profile = user.toObject ? user.toObject() : { ...user }
+	if (req.staff) {
+		profile.staff = {
+			_id: req.staff._id,
+			fullName: req.staff.fullName,
+			email: req.staff.email,
+			role: req.staff.role,
+			medicalLicense: req.staff.medicalLicense,
+		}
+		profile.isStaff = true
+		profile.staffRole = req.staff.role
+	}
+
+	return res.status(200).json(profile)
 })
 
 module.exports = {

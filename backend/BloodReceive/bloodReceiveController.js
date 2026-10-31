@@ -88,9 +88,10 @@ const acceptRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
 	const request = await ReceiveRequests.findOne({
 		_id: id,
-		bloodbankId: req.user._id,
+		bloodbankId,
 	})
 
 	if (!request) {
@@ -122,13 +123,16 @@ const rejectRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
+	const actorId = req.staff ? req.staff._id : req.user._id
+
 	return await withTransaction(async (session) => {
 		const opts = session ? { session } : {}
 
 		const request = await ReceiveRequests.findOne(
 			{
 				_id: id,
-				bloodbankId: req.user._id,
+				bloodbankId,
 			},
 			null,
 			opts
@@ -156,8 +160,8 @@ const rejectRequest = catchAsync(async (req, res, next) => {
 			const { releaseReservationForRequest } = require('../BloodUnit/reservationService')
 			await releaseReservationForRequest({
 				requestId: request._id,
-				bloodbankId: req.user._id,
-				actorId: req.user._id,
+				bloodbankId,
+				actorId,
 				actorModel: 'bloodbank',
 				ipAddress: req.ip,
 				reason: message || 'Rejected by Bloodbank.',
@@ -297,7 +301,19 @@ const rejectRequestByUser = catchAsync(async (req, res, next) => {
 })
 
 const fulfilledRequest = catchAsync(async (req, res, next) => {
-	const { id, bloodType, unit, whenDoYouWant } = req.body
+	const {
+		id,
+		bloodType,
+		unit,
+		whenDoYouWant,
+		crossmatchResult,
+		unitCrossmatches,
+		recipientPatientName,
+		hospitalName,
+		dispatchNotes,
+		isEmergency,
+		emergencyReason,
+	} = req.body
 
 	if (!id || !mongoose.Types.ObjectId.isValid(id)) {
 		return res.status(400).json({
@@ -305,13 +321,22 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 		})
 	}
 
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
+	const actorId = req.staff ? req.staff._id : req.user._id
+	const staffId = req.staff ? req.staff._id : null
+	const isMOVerified = !!(
+		req.staff &&
+		req.staff.role === 'Medical_Officer' &&
+		req.staff.medicalLicense?.isVerified === true
+	)
+
 	return await withTransaction(async (session) => {
 		const opts = session ? { session } : {}
 
 		const request = await ReceiveRequests.findOne(
 			{
 				_id: id,
-				bloodbankId: req.user._id,
+				bloodbankId,
 			},
 			null,
 			opts
@@ -346,50 +371,207 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			throw err
 		}
 
+		const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
 		const hasTraceableReservation =
 			Array.isArray(request.reservedUnitIds) && request.reservedUnitIds.length > 0
 
-		// If request has traceable reserved units, enforce reservation hold and clinical shelf-life!
+		// If request has traceable reserved units, enforce reservation hold, compatibility and clinical shelf-life!
 		if (hasTraceableReservation) {
 			const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
+			const { recordAuditLog } = require('../BloodUnit/bloodUnitAuditModel')
 			const reservedUnits = await BloodUnit.find(
 				{
 					_id: { $in: request.reservedUnitIds },
-					bloodbankId: req.user._id,
+					bloodbankId,
 				},
 				null,
 				opts
 			)
 
 			const now = new Date()
-			for (const unit of reservedUnits) {
-				if (unit.status !== 'Reserved') {
+			for (const u of reservedUnits) {
+				if (u.status !== 'Reserved') {
 					const err = new Error(
-						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' is no longer in Reserved status (current: ${unit.status}).`
+						`Cannot fulfill request: Reserved unit '${u.unitNumber || u._id}' is no longer in Reserved status (current: ${u.status}).`
 					)
 					err.statusCode = 400
 					throw err
 				}
-				if (unit.issuance?.crossmatchResult === 'Incompatible') {
+				if (u.issuance?.crossmatchResult === 'Incompatible') {
 					const err = new Error(
-						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' has an Incompatible crossmatch result. Incompatible units cannot be fulfilled.`
+						`Cannot fulfill request: Reserved unit '${u.unitNumber || u._id}' has an Incompatible crossmatch result. Incompatible units cannot be fulfilled.`
 					)
 					err.statusCode = 400
 					throw err
 				}
-				if (unit.expiryDate && new Date(unit.expiryDate) <= now) {
+				if (u.expiryDate && new Date(u.expiryDate) <= now) {
 					const err = new Error(
-						`Cannot fulfill request: Reserved unit '${unit.unitNumber || unit._id}' has expired clinically.`
+						`Cannot fulfill request: Reserved unit '${u.unitNumber || u._id}' has expired clinically.`
 					)
 					err.statusCode = 400
 					throw err
 				}
 				if (
-					unit.reservation?.reservedExpiresAt &&
-					new Date(unit.reservation.reservedExpiresAt) <= now
+					u.reservation?.reservedExpiresAt &&
+					new Date(u.reservation.reservedExpiresAt) <= now
 				) {
 					const err = new Error(
-						`Cannot fulfill request: Reservation hold for unit '${unit.unitNumber || unit._id}' has expired.`
+						`Cannot fulfill request: Reservation hold for unit '${u.unitNumber || u._id}' has expired.`
+					)
+					err.statusCode = 400
+					throw err
+				}
+			}
+
+			// All-or-nothing check: count of valid reserved units must satisfy requested unit count
+			const requiredReservedCount = Number(unit) || reservedUnits.length
+			if (reservedUnits.length < requiredReservedCount) {
+				const err = new Error(
+					`Cannot fulfill request: Insufficient reserved units. Request requires ${requiredReservedCount} unit(s), but only ${reservedUnits.length} unit(s) are reserved.`
+				)
+				err.statusCode = 400
+				throw err
+			}
+
+			// Atomically issue reserved units and record immutable audit ledger entries
+			for (const u of reservedUnits) {
+				const previousStatus = u.status
+				u.status = 'Issued'
+				u.issuance = u.issuance || {}
+				u.issuance.issuedToReceiveRequestId = request._id
+				u.issuance.recipientPatientName = recipientPatientName || ''
+				u.issuance.hospitalName = hospitalName || ''
+				u.issuance.crossmatchResult = u.issuance.crossmatchResult || crossmatchResult || 'Compatible'
+				u.issuance.issuedAt = now
+				u.issuance.issuedBy = bloodbankId
+				u.issuance.issuedByStaffId = staffId || null
+				u.issuance.dispatchNotes = dispatchNotes || ''
+				if (typeof u.save === 'function') {
+					await u.save(opts)
+				}
+
+				if (typeof recordAuditLog === 'function') {
+					await recordAuditLog({
+						unitId: u._id,
+						unitNumber: u.unitNumber,
+						bloodbankId,
+						action: 'UNIT_ISSUED',
+						previousStatus,
+						newStatus: 'Issued',
+						actorId,
+						actorModel: 'bloodbank',
+						ipAddress: req.ip || null,
+						reason: dispatchNotes || 'Unit clinically issued and released for receive request.',
+						metadata: {
+							receiveRequestId: request._id,
+							recipientPatientName,
+							hospitalName,
+							crossmatchResult: u.issuance.crossmatchResult,
+							staffId,
+						},
+						session: opts.session,
+					}).catch(() => {})
+				}
+			}
+		}
+
+		// When request does NOT already have reserved units:
+		if (!hasTraceableReservation) {
+			let hasTraceableInventory = false
+			if (mongoose.connection && mongoose.connection.readyState === 1) {
+				const { BloodUnit } = require('../BloodUnit/bloodUnitModel')
+				hasTraceableInventory = !!(await BloodUnit.exists({ bloodbankId }, opts).catch(() => false))
+			}
+
+			if (hasTraceableInventory) {
+				const { findEligibleUnitsFEFO, reserveUnitsForRequest } = require('../BloodUnit/reservationService')
+				const { issueUnitsForRequest } = require('../BloodUnit/issuanceService')
+
+				// Traceable Inventory Isolation: NEVER consume or decrement legacy aggregate stock!
+				// 1. Verify availability of issue-eligible units via FEFO first
+				const eligibleCandidates = await findEligibleUnitsFEFO({
+					bloodbankId,
+					bloodGroup: effectiveBloodType,
+					requiredCount: unitsToDeduct,
+					now: new Date(),
+					options: opts,
+				})
+
+				if (eligibleCandidates.length < unitsToDeduct) {
+					const err = new Error(
+						`Cannot fulfill request: Insufficient verified, issue-eligible traceable units available for blood group '${effectiveBloodType}'. Required: ${unitsToDeduct}, available: ${eligibleCandidates.length}.`
+					)
+					err.statusCode = 400
+					throw err
+				}
+
+				// 2. Clinical lifecycle guard: request must be in Accepted status before fulfillment
+				if (request.status !== 'Accepted') {
+					const err = new Error(
+						`Cannot fulfill request: Receive request must be in 'Accepted' status before fulfillment (current status: '${request.status}').`
+					)
+					err.statusCode = 400
+					throw err
+				}
+
+				// 3. Atomically reserve eligible units
+				await reserveUnitsForRequest({
+					requestId: request._id,
+					bloodbankId,
+					actorId,
+					actorModel: 'bloodbank',
+					ipAddress: req.ip || null,
+					holdHours: 24,
+					session,
+				})
+
+				// 4. Clinically issue reserved units
+				await issueUnitsForRequest({
+					requestId: request._id,
+					bloodbankId,
+					actorId,
+					actorModel: 'bloodbank',
+					staffId,
+					isMOVerified,
+					recipientPatientName: recipientPatientName || '',
+					hospitalName: hospitalName || '',
+					crossmatchResult: crossmatchResult || 'Compatible',
+					unitCrossmatches: unitCrossmatches || null,
+					dispatchNotes: dispatchNotes || '',
+					isEmergency: isEmergency === true || crossmatchResult === 'Emergency_Uncrossmatched',
+					emergencyReason: emergencyReason || '',
+					ipAddress: req.ip || null,
+					session,
+				})
+
+				return res.status(200).json({
+					message: 'Request Fulfilled.',
+				})
+			} else {
+				// Pure Legacy Fallback: Only executed when blood bank has 0 traceable units in DB
+				const isAvailable = await bloodStockController.checkAvailability(
+					bloodbankId,
+					effectiveBloodType,
+					unitsToDeduct,
+					opts
+				)
+				if (!isAvailable) {
+					const err = new Error(
+						`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
+					)
+					err.statusCode = 400
+					throw err
+				}
+
+				const stockUpdated = await bloodStockController.decreaseStock(
+					bloodbankId,
+					effectiveBloodType,
+					unitsToDeduct,
+					opts
+				)
+				if (!stockUpdated) {
+					const err = new Error(
+						`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
 					)
 					err.statusCode = 400
 					throw err
@@ -397,46 +579,11 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			}
 		}
 
-		const unitsToDeduct = Math.max(1, Number(unit) || Number(request.unit) || 1)
-
-		// Legacy stock isolation: Do not check or decrease legacy aggregate stock if fulfilling via traceable units!
-		if (!hasTraceableReservation) {
-			// Verify availability first
-			const isAvailable = await bloodStockController.checkAvailability(
-				req.user._id,
-				effectiveBloodType,
-				unitsToDeduct,
-				opts
-			)
-			if (!isAvailable) {
-				const err = new Error(
-					`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
-				)
-				err.statusCode = 400
-				throw err
-			}
-
-			// 1. Atomically decrement stock
-			const stockUpdated = await bloodStockController.decreaseStock(
-				req.user._id,
-				effectiveBloodType,
-				unitsToDeduct,
-				opts
-			)
-			if (!stockUpdated) {
-				const err = new Error(
-					`Cannot fulfill request: Insufficient stock for blood type ${effectiveBloodType}.`
-				)
-				err.statusCode = 400
-				throw err
-			}
-		}
-
-		// 2. Atomically transition request to Fulfilled
+		// Transition request to Fulfilled
 		const updated = await ReceiveRequests.findOneAndUpdate(
 			{
 				_id: id,
-				bloodbankId: req.user._id,
+				bloodbankId,
 				status: { $ne: 'Fulfilled' },
 			},
 			{
@@ -448,11 +595,10 @@ const fulfilledRequest = catchAsync(async (req, res, next) => {
 			{ new: true, ...opts }
 		)
 
-		// If request transition failed (e.g. concurrent fulfillment), restore decremented legacy stock!
 		if (!updated) {
 			if (!session && !hasTraceableReservation) {
 				await bloodStockController.increaseStock(
-					req.user._id,
+					bloodbankId,
 					effectiveBloodType,
 					unitsToDeduct
 				)
@@ -507,8 +653,9 @@ const getUserData = catchAsync(async (req, res) => {
 })
 
 const getBloodbankData = catchAsync(async (req, res) => {
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
 	const receiveRequests = await ReceiveRequests.find({
-		bloodbankId: req.user._id,
+		bloodbankId,
 	}).populate({ path: 'userId' })
 
 	const data = receiveRequests.map((element, index) => {
@@ -574,10 +721,15 @@ const getUserStates = catchAsync(async (req, res, next) => {
 })
 
 const getBloodbankStates = catchAsync(async (req, res, next) => {
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
+	const bbObjectId = mongoose.Types.ObjectId.isValid(bloodbankId)
+		? new mongoose.Types.ObjectId(bloodbankId)
+		: bloodbankId
+
 	const userStates = await ReceiveRequests.aggregate([
 		{
 			$match: {
-				bloodbankId: req.user._id,
+				bloodbankId: bbObjectId,
 			},
 		},
 		{
@@ -625,7 +777,8 @@ const getBloodbankDataQuery = catchAsync(async (req, res, next) => {
 		}
 	}
 
-	const filter = { bloodbankId: req.user._id }
+	const bloodbankId = req.staff ? req.staff.bloodbankId : (req.bloodbankId || req.user._id)
+	const filter = { bloodbankId }
 
 	if (
 		req.query.status &&

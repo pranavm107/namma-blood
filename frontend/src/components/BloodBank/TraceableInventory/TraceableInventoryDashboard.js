@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
 	Box,
@@ -142,15 +142,15 @@ const getTestBadge = (result) => {
 
 const TraceableInventoryDashboard = () => {
 	const dispatch = useDispatch()
-	const { units, total, page, limit, totalPages, selectedUnit, isLoading, isDetailLoading, isActionSubmitting, error, actionSuccessMessage } = useSelector(
+	const { units, total, page, limit, totalPages, selectedUnit, statusBreakdown, isLoading, isDetailLoading, isActionSubmitting, error, actionSuccessMessage } = useSelector(
 		(state) => state?.bloodUnit || {}
 	)
 	const { stock } = useSelector((state) => state?.stock || {})
 	const loginState = useSelector((state) => state?.login || {})
 
 	// Staff / Actor role derivation
-	const staffRole = loginState?.user?.staffRole || loginState?.user?.role || ''
-	const isMedicalOfficer = staffRole === 'Medical_Officer' || loginState?.role === 'BLOODBANK'
+	const staffRole = loginState?.user?.staffRole || (loginState?.user?.isStaff ? loginState?.user?.role : '')
+	const isMedicalOfficer = staffRole === 'Medical_Officer'
 
 	// Filters
 	const [search, setSearch] = useState('')
@@ -365,17 +365,51 @@ const TraceableInventoryDashboard = () => {
 		}
 	}
 
-	// Status breakdown counts
-	const breakdown = stock?.traceableStatusBreakdown || {
-		Quarantined: 0,
-		Tested_Passed: 0,
-		Available: 0,
-		Reserved: 0,
-		Issued: 0,
-		Discarded: 0,
-		Expired: 0,
-		totalUnits: 0,
-	}
+	// Status breakdown counts (prioritizing full DB aggregation with fallback to loaded units)
+	const breakdown = useMemo(() => {
+		if (statusBreakdown && typeof statusBreakdown === 'object') {
+			return statusBreakdown
+		}
+		if (stock?.traceableStatusBreakdown && typeof stock.traceableStatusBreakdown === 'object') {
+			return stock.traceableStatusBreakdown
+		}
+
+		// Fallback: derive dynamically from currently loaded units in view
+		const now = new Date()
+		const counts = {
+			Available: 0,
+			Quarantined: 0,
+			Tested_Passed: 0,
+			Reserved: 0,
+			Issued: 0,
+			Expired: 0,
+			Discarded: 0,
+			totalUnits: Array.isArray(units) ? units.length : 0,
+		}
+
+		if (Array.isArray(units)) {
+			for (const u of units) {
+				const isExpired = u.status === 'Expired' || (u.expiryDate && new Date(u.expiryDate) <= now)
+				if (u.status === 'Discarded') {
+					counts.Discarded++
+				} else if (u.status === 'Issued') {
+					counts.Issued++
+				} else if (isExpired) {
+					counts.Expired++
+				} else if (u.status === 'Reserved') {
+					counts.Reserved++
+				} else if (u.status === 'Available' && u.clearance?.isVerified) {
+					counts.Available++
+				} else if (u.status === 'Tested_Passed') {
+					counts.Tested_Passed++
+				} else {
+					counts.Quarantined++
+				}
+			}
+		}
+
+		return counts
+	}, [statusBreakdown, stock?.traceableStatusBreakdown, units])
 
 	return (
 		<Container maxWidth='xl' sx={{ pb: 8, pt: 2 }}>
@@ -601,7 +635,7 @@ const TraceableInventoryDashboard = () => {
 								const sColor = getStatusColor(unit.status)
 								const isExpired = unit.expiryDate && new Date(unit.expiryDate) <= new Date()
 								const canScreen = unit.status === 'Quarantined' || unit.status === 'Tested_Passed'
-								const canClear = isMedicalOfficer && unit.status === 'Tested_Passed' && !unit.clearance?.isVerified
+								const canClear = isMedicalOfficer && unit.status === 'Tested_Passed' && !unit.clearance?.isVerified && !isExpired
 								const canCrossmatch = unit.status === 'Reserved'
 								const canDispatch = unit.status === 'Issued' && !unit.issuance?.dispatch?.isDispatched
 								const canDiscard = ['Quarantined', 'Tested_Passed', 'Available', 'Reserved', 'Expired'].includes(unit.status)
@@ -894,6 +928,17 @@ const TraceableInventoryDashboard = () => {
 									<Typography variant='caption' sx={{ color: '#64748b', fontStyle: 'italic', display: 'block' }}>
 										Notes: {selectedUnit.clearance.notes}
 									</Typography>
+								)}
+								{!selectedUnit?.clearance?.isVerified && (
+									<Alert severity={selectedUnit?.status === 'Tested_Passed' ? 'info' : 'warning'} sx={{ mt: 1, py: 0.5 }}>
+										<Typography variant='caption'>
+											{selectedUnit?.status === 'Tested_Passed'
+												? 'All 5 TTI tests confirmed Non-Reactive. Verification by an authorized Medical Officer is required to transition to Available.'
+												: selectedUnit?.status === 'Quarantined'
+												? 'Unit held in Quarantine: Complete 5-panel TTI screening must be recorded and non-reactive before clearance.'
+												: 'Unit is not in Tested_Passed state and cannot be cleared for availability.'}
+										</Typography>
+									</Alert>
 								)}
 							</Box>
 

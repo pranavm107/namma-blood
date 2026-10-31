@@ -83,6 +83,14 @@ async function discardBloodUnits({
 	}
 	const validatedReason = reason.trim()
 
+	if (validatedReason === 'Other' && (!notes || typeof notes !== 'string' || !notes.trim())) {
+		const err = new Error(
+			"Clinical discard reason 'Other' requires explanatory notes describing the cause of disposal."
+		)
+		err.statusCode = 400
+		throw err
+	}
+
 	// Normalize target unit IDs
 	let targetIdentifiers = []
 	if (Array.isArray(unitIds)) {

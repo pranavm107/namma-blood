@@ -14,6 +14,7 @@ const {
 	recordCrossmatchForUnit,
 	recordPhysicalDispatch,
 } = require('../BloodUnit/issuanceService')
+const { reserveUnitsForRequest } = require('../BloodUnit/reservationService')
 const { processExpiredReservations } = require('../BloodUnit/reservationExpiryWorker')
 const {
 	discardBloodUnits,
@@ -1373,5 +1374,183 @@ describe('Phase 3.4 — Real MongoDB Replica-Set (rs0) Integration Validation', 
 		const stockAfterConflict = await Bloodstock.findOne({ bloodbankId: testBloodbankId })
 		assert.strictEqual(stockAfterConflict.A_Positive, 2)
 		assert.strictEqual(stockAfterConflict.O_Positive, 3)
+	})
+
+	it('Scenario 16: Complete 10-Stage Clinical Lifecycle Pipeline on live rs0', async () => {
+		const now = new Date()
+
+		// 1. Donation intake creates unit in Quarantined state
+		const din = getNextDIN()
+		const unit = new BloodUnit({
+			unitNumber: din,
+			bloodbankId: testBloodbankId,
+			bloodGroup: 'AB_Positive',
+			componentType: 'Whole_Blood',
+			volumeMl: 350,
+			collectionDate: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+			expiryDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+			status: 'Quarantined',
+		})
+		await unit.save()
+		assert.strictEqual(unit.status, 'Quarantined')
+		assert.strictEqual(unit.isIssueEligible(), false)
+
+		// 2. Record 5-panel TTI screening -> Tested_Passed
+		unit.testing = {
+			hiv: 'Non_Reactive',
+			hbv: 'Non_Reactive',
+			hcv: 'Non_Reactive',
+			syphilis: 'Non_Reactive',
+			malaria: 'Non_Reactive',
+			testBatchId: 'BATCH-E2E-001',
+			testedAt: now,
+		}
+		unit.status = 'Tested_Passed'
+		await unit.save()
+		assert.strictEqual(unit.status, 'Tested_Passed')
+		assert.strictEqual(unit.isIssueEligible(), false, 'Screening alone never makes a unit issue-eligible')
+
+		// 3. Medical Officer clearance -> Available
+		unit.clearance = {
+			isVerified: true,
+			verifiedBy: testBloodbankId,
+			verifiedByStaffId: verifiedMOStaffId,
+			verifiedAt: now,
+			notes: 'Clinical clearance approved by Medical Officer',
+		}
+		unit.status = 'Available'
+		await unit.save()
+		assert.strictEqual(unit.status, 'Available')
+		assert.strictEqual(unit.isIssueEligible(), true)
+
+		// 4. Create patient receive request
+		const receiveReq = await seedReceiveRequest({
+			bloodbankId: testBloodbankId,
+			bloodType: 'AB_Positive',
+			unitCount: 1,
+			status: 'Accepted',
+		})
+
+		// 5. Atomic FEFO reservation on rs0
+		const reservationRes = await withTransaction(async (session) => {
+			return await reserveUnitsForRequest({
+				requestId: receiveReq._id,
+				bloodbankId: testBloodbankId,
+				actorId: verifiedMOStaffId,
+				session,
+			})
+		})
+		assert.strictEqual(reservationRes.reservedUnits.length, 1)
+		const reservedUnit = await BloodUnit.findById(unit._id)
+		assert.strictEqual(reservedUnit.status, 'Reserved')
+
+		// 6. Record Crossmatch Compatibility
+		await withTransaction(async (session) => {
+			return await recordCrossmatchForUnit({
+				unitId: unit._id,
+				receiveRequestId: receiveReq._id,
+				bloodbankId: testBloodbankId,
+				actorId: verifiedMOStaffId,
+				crossmatchResult: 'Compatible',
+				session,
+			})
+		})
+
+		// 7. Atomic Issuance inside transaction on rs0
+		const issueRes = await withTransaction(async (session) => {
+			return await issueUnitsForRequest({
+				requestId: receiveReq._id,
+				bloodbankId: testBloodbankId,
+				actorId: verifiedMOStaffId,
+				staffId: verifiedMOStaffId,
+				recipientPatientName: 'E2E Test Patient',
+				hospitalName: 'Apollo City Hospital',
+				session,
+			})
+		})
+		assert.strictEqual(issueRes.issuedUnits.length, 1)
+		const issuedUnit = await BloodUnit.findById(unit._id)
+		assert.strictEqual(issuedUnit.status, 'Issued')
+
+		// 8. Physical Dispatch
+		const dispatchRes = await withTransaction(async (session) => {
+			return await recordPhysicalDispatch({
+				requestId: receiveReq._id,
+				bloodbankId: testBloodbankId,
+				actorId: verifiedMOStaffId,
+				staffId: labTechStaffId,
+				dispatchedToRecipient: 'Ambulance Courier #42',
+				transportBoxId: 'BOX-COLD-99',
+				dispatchNotes: 'Delivered in monitored cold box at 4C',
+				session,
+			})
+		})
+		assert.strictEqual(dispatchRes.dispatchedUnits.length, 1)
+		const dispatchedUnit = await BloodUnit.findById(unit._id)
+		assert.strictEqual(dispatchedUnit.status, 'Issued')
+		assert.strictEqual(dispatchedUnit.issuance.dispatch.isDispatched, true)
+
+		// 9. Guard: Discard on Dispatched unit must fail closed
+		await assert.rejects(
+			async () => {
+				await discardBloodUnits({
+					unitIds: [unit._id],
+					bloodbankId: testBloodbankId,
+					reason: 'Expired',
+					actorId: verifiedMOStaffId,
+				})
+			},
+			{
+				name: 'Error',
+				message: /Cannot discard unit.*already dispatched/i,
+			}
+		)
+
+		// 10. Biohazard discard on an expired unit with reason 'Other' and mandatory notes
+		const discardDIN = getNextDIN()
+		const expiredUnit = new BloodUnit({
+			unitNumber: discardDIN,
+			bloodbankId: testBloodbankId,
+			bloodGroup: 'AB_Positive',
+			componentType: 'Whole_Blood',
+			volumeMl: 350,
+			collectionDate: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000),
+			expiryDate: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
+			status: 'Expired',
+		})
+		await expiredUnit.save()
+
+		// Discard reason 'Other' without notes must be rejected
+		await assert.rejects(
+			async () => {
+				await discardBloodUnits({
+					unitIds: [expiredUnit._id],
+					bloodbankId: testBloodbankId,
+					reason: 'Other',
+					notes: '',
+					actorId: verifiedMOStaffId,
+				})
+			},
+			{
+				name: 'Error',
+				message: /requires explanatory notes/i,
+			}
+		)
+
+		// Discard with notes succeeds
+		const discardOutcome = await withTransaction(async (session) => {
+			return await discardBloodUnits({
+				unitIds: [expiredUnit._id],
+				bloodbankId: testBloodbankId,
+				reason: 'Other',
+				notes: 'Bag seal damaged during quarterly inventory audit',
+				actorId: verifiedMOStaffId,
+				session,
+			})
+		})
+		assert.strictEqual(discardOutcome.discardedCount, 1)
+		const finalUnit = await BloodUnit.findById(expiredUnit._id)
+		assert.strictEqual(finalUnit.status, 'Discarded')
+		assert.strictEqual(finalUnit.discard.reason, 'Other')
 	})
 })

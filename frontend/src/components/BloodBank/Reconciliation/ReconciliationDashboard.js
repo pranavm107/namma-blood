@@ -52,6 +52,7 @@ import {
 	clearReconciliationError,
 	clearReconciliationSuccessMessage,
 } from '../../../store/reconciliationSlice'
+import { getBloodStock } from '../../../store/stockSlice'
 
 const VALID_BLOOD_GROUPS = [
 	'A_Positive',
@@ -68,7 +69,7 @@ const VALID_COMPONENTS = [
 	'Whole_Blood',
 	'Packed_Red_Blood_Cells',
 	'Fresh_Frozen_Plasma',
-	'Platelets',
+	'Platelet_Concentrate',
 	'Cryoprecipitate',
 ]
 
@@ -137,6 +138,12 @@ const ReconciliationDashboard = () => {
 		}
 	}, [successMessage, dispatch])
 
+	useEffect(() => {
+		if (!report) {
+			dispatch(fetchReconciliationReport({ recordAudit: false }))
+		}
+	}, [dispatch, report])
+
 	const handleGenerateReport = useCallback(() => {
 		dispatch(fetchReconciliationReport({ recordAudit: recordAuditOnReport }))
 	}, [dispatch, recordAuditOnReport])
@@ -174,7 +181,14 @@ const ReconciliationDashboard = () => {
 
 	const handleRowChange = (index, field, value) => {
 		setManifestRows((prev) =>
-			prev.map((row, idx) => (idx === index ? { ...row, [field]: value } : row))
+			prev.map((row, idx) => {
+				if (idx !== index) return row
+				const updated = { ...row, [field]: value }
+				if (field === 'componentType' && value !== 'Whole_Blood') {
+					updated.deductFromLegacy = false
+				}
+				return updated
+			})
 		)
 	}
 
@@ -213,6 +227,15 @@ const ReconciliationDashboard = () => {
 		}
 
 		if (targetMode === 'EXECUTE') {
+			const hasPlaceholder = manifestRows.find((r) =>
+				/^(DIN-LEG-|SAMPLE|TEST|MOCK|PLACEHOLDER|DEMO)/i.test(r.unitNumber?.trim() || '')
+			)
+			if (hasPlaceholder) {
+				toast.error(
+					`Cannot execute migration with sample or placeholder DIN '${hasPlaceholder.unitNumber}'. Scan or enter verified physical blood bag barcodes.`
+				)
+				return
+			}
 			setIsConfirmDialogOpen(true)
 			setExecuteConfirmed(false)
 		} else {
@@ -238,7 +261,12 @@ const ReconciliationDashboard = () => {
 				batchId: batchIdInput.trim() || undefined,
 				notes: migrationNotes.trim(),
 			})
-		)
+		).then((actionResult) => {
+			if (actionResult?.meta?.requestStatus === 'fulfilled') {
+				dispatch(fetchReconciliationReport({ recordAudit: false }))
+				dispatch(getBloodStock())
+			}
+		})
 	}
 
 	return (
@@ -499,28 +527,32 @@ const ReconciliationDashboard = () => {
 													</TableCell>
 													<TableCell align='center'>
 														<Typography fontWeight='bold' color='warning.dark'>
-															{g.legacyCount}
+															{Number(g.legacyCount) || 0}
 														</Typography>
 													</TableCell>
 													<TableCell align='center'>
 														<Chip
-															label={g.traceableQuarantined}
+															label={Number(g.traceableQuarantined) || 0}
 															size='small'
-															color={g.traceableQuarantined > 0 ? 'warning' : 'default'}
+															color={(Number(g.traceableQuarantined) || 0) > 0 ? 'warning' : 'default'}
 															sx={{ minWidth: 32 }}
 														/>
 													</TableCell>
 													<TableCell align='center'>
 														<Chip
-															label={g.traceableAvailable}
+															label={Number(g.traceableAvailable) || 0}
 															size='small'
-															color={g.traceableAvailable > 0 ? 'success' : 'default'}
+															color={(Number(g.traceableAvailable) || 0) > 0 ? 'success' : 'default'}
 															sx={{ minWidth: 32 }}
 														/>
 													</TableCell>
-													<TableCell align='center'>{g.traceableReserved}</TableCell>
-													<TableCell align='center'>{g.traceableIssued + g.traceableDispatched}</TableCell>
-													<TableCell align='center'>{g.traceableExpired + g.traceableDiscarded}</TableCell>
+													<TableCell align='center'>{Number(g.traceableReserved) || 0}</TableCell>
+													<TableCell align='center'>
+														{(Number(g.traceableIssued) || 0) + (Number(g.traceableDispatched) || 0)}
+													</TableCell>
+													<TableCell align='center'>
+														{(Number(g.traceableExpired) || 0) + (Number(g.traceableDiscarded) || 0)}
+													</TableCell>
 													<TableCell align='center'>
 														<Chip
 															label={g.delta > 0 ? `+${g.delta} Unverified` : `${g.delta}`}
@@ -811,11 +843,17 @@ const ReconciliationDashboard = () => {
 												</TableCell>
 												<TableCell align='center'>
 													<Switch
-														checked={row.deductFromLegacy}
+														checked={Boolean(row.deductFromLegacy) && row.componentType === 'Whole_Blood'}
+														disabled={row.componentType !== 'Whole_Blood'}
 														onChange={(e) => handleRowChange(index, 'deductFromLegacy', e.target.checked)}
 														color='primary'
 														size='small'
 													/>
+													{row.componentType !== 'Whole_Blood' && (
+														<Typography variant='caption' display='block' color='textSecondary' sx={{ fontSize: '0.65rem' }}>
+															Whole-Blood Only
+														</Typography>
+													)}
 												</TableCell>
 												<TableCell align='center'>
 													<IconButton

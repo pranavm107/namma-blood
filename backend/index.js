@@ -10,22 +10,28 @@ const {
 
 const workerConfig = parseWorkerConfig(process.env)
 
-const connection = async () => {
-	try {
-		await mongoose.connect(process.env.database_url)
-		console.log('Successfully connected your application with database!!')
+const connection = async (retries = 5, delayMs = 2000) => {
+	for (let i = 0; i < retries; i++) {
+		try {
+			await mongoose.connect(process.env.database_url)
+			console.log('Successfully connected your application with database!!')
 
-		// Explicit Opt-In: Start reservation expiry background worker only when configured
-		if (workerConfig.enabled) {
-			startReservationExpiryWorker({
-				intervalMs: workerConfig.intervalMs,
-				batchSize: workerConfig.batchSize,
-				runOnBoot: workerConfig.runOnBoot,
-				logger: console,
-			})
+			// Explicit Opt-In: Start reservation expiry background worker only when configured
+			if (workerConfig.enabled) {
+				startReservationExpiryWorker({
+					intervalMs: workerConfig.intervalMs,
+					batchSize: workerConfig.batchSize,
+					runOnBoot: workerConfig.runOnBoot,
+					logger: console,
+				})
+			}
+			return
+		} catch (err) {
+			console.error(`Database connection attempt ${i + 1} failed:`, err.message)
+			if (i < retries - 1) {
+				await new Promise((resolve) => setTimeout(resolve, delayMs))
+			}
 		}
-	} catch (err) {
-		console.error('Database connection failed:', err.message)
 	}
 }
 connection()

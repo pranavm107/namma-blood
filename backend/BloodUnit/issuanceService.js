@@ -198,6 +198,7 @@ async function recordCrossmatchForUnit({
 	if (notes) {
 		unit.issuance.dispatchNotes = notes.trim().substring(0, 500)
 	}
+	unit.markModified('issuance')
 
 	await unit.save(opts)
 

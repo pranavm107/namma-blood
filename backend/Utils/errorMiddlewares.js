@@ -33,12 +33,13 @@ const sendError = (err, req, res, next) => {
 	if (req.originalUrl.startsWith('/api')) {
 		// A) Operational, trusted error: send message to client
 		if (err.isOperational) {
-			return res.status(err.statusCode).json({
-				message: err.message,
-			})
+			const payload = { message: err.message }
+			if (err.details) payload.details = err.details
+			return res.status(err.statusCode).json(payload)
 		}
 
-		// B) Programming or other unknown error: don't leak error details
+		// B) Programming or other unknown error: log and return generic message
+		console.error('Unhandled API Error:', err)
 		return res.status(500).json({
 			message: 'Something went very wrong! Try again later.',
 		})
@@ -54,6 +55,11 @@ module.exports = (err, req, res, next) => {
 	err.statusCode = err.statusCode || 500
 	let error = { ...err }
 	error.message = err.message
+	error.statusCode = err.statusCode
+	error.details = err.details
+	error.isOperational = Boolean(
+		err.isOperational || (err.statusCode >= 400 && err.statusCode < 500)
+	)
 
 	if (error.name === 'CastError') error = handleCastErrorDB(error)
 	if (error.code === 11000) error = handleDuplicateFieldsDB(error)

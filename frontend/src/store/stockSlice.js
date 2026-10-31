@@ -75,6 +75,13 @@ const bloodStockSlice = createSlice({
 					AB_Negative: action?.payload?.AB_Negative,
 					O_Positive: action?.payload?.O_Positive,
 					O_Negative: action?.payload?.O_Negative,
+					inventoryClassification: action?.payload?.inventoryClassification,
+					isVerifiedStock: action?.payload?.isVerifiedStock,
+					legacyUnverifiedStock: action?.payload?.legacyUnverifiedStock,
+					traceableVerifiedStock: action?.payload?.traceableVerifiedStock,
+					traceableStatusBreakdown: action?.payload?.traceableStatusBreakdown,
+					isTraceableActive: action?.payload?.isTraceableActive,
+					legacyNotice: action?.payload?.legacyNotice,
 				}
 				return {
 					...state,

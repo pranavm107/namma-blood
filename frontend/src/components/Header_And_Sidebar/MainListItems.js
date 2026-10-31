@@ -12,6 +12,7 @@ import Inventory2Icon from '@mui/icons-material/Inventory2'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import BiotechIcon from '@mui/icons-material/Biotech'
 import SecurityIcon from '@mui/icons-material/Security'
+import LocalHospitalIcon from '@mui/icons-material/LocalHospital'
 import { useDispatch, useSelector } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import LogoutIcon from '@mui/icons-material/Logout'
@@ -43,6 +44,10 @@ const MainListItems = () => {
 
 	const bloodbankHandler = () => {
 		navigate('/login/bloodbank')
+	}
+
+	const staffHandler = () => {
+		navigate('/login/staff')
 	}
 
 	const wantToDonateHandler = () => {
@@ -131,6 +136,16 @@ const MainListItems = () => {
 							<BloodtypeIcon />
 						</ListItemIcon>
 						<ListItemText primary='Bloodbank Login' />
+					</ListItemButton>
+
+					<ListItemButton
+						onClick={staffHandler}
+						selected={url[1] === 'staff' && url[2] === 'login'}
+					>
+						<ListItemIcon>
+							<LocalHospitalIcon />
+						</ListItemIcon>
+						<ListItemText primary='Staff Portal' />
 					</ListItemButton>
 
 					<ListItemButton

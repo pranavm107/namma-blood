@@ -16,6 +16,7 @@ const initialState = {
 	limit: 10,
 	totalPages: 1,
 	selectedUnit: null,
+	statusBreakdown: null,
 	isLoading: false,
 	isDetailLoading: false,
 	isActionSubmitting: false,
@@ -271,6 +272,7 @@ const bloodUnitSlice = createSlice({
 				state.page = action.payload?.page || 1
 				state.limit = action.payload?.limit || 10
 				state.totalPages = action.payload?.totalPages || 1
+				state.statusBreakdown = action.payload?.statusBreakdown || null
 			})
 			.addCase(fetchBloodUnits.rejected, (state, action) => {
 				state.isLoading = false

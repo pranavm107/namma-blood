@@ -101,6 +101,17 @@ async function getLegacyStock(bloodbankId, options = {}) {
 /**
  * Retrieves a full lifecycle status breakdown of traceable units for a blood bank.
  *
+ * Clinical Counting Rules:
+ * 1. Discarded: Permanently retired biohazard waste.
+ * 2. Issued: Fulfilled units (including dispatched).
+ * 3. Expired: Units with status === 'Expired' OR whose expiryDate <= now.
+ * 4. Reserved: Units in active reservation hold (not expired).
+ * 5. Available: Units satisfying isIssueEligible (Available + verified MO clearance + 5 TTI Non_Reactive + not expired).
+ * 6. Tested_Passed: Units in Tested_Passed awaiting MO clearance (not expired).
+ * 7. Quarantined: Freshly collected or migrated units awaiting infectious disease screening (not expired).
+ *
+ * Every traceable unit is assigned to exactly one lifecycle category (sum of categories === totalUnits).
+ *
  * @param {string|mongoose.Types.ObjectId} bloodbankId
  * @param {Object} [options]
  * @returns {Promise<Object>}
@@ -112,8 +123,69 @@ async function getTraceableStatusBreakdown(bloodbankId, options = {}) {
 	const pipeline = [
 		{ $match: { bloodbankId: bbObjectId } },
 		{
+			$project: {
+				category: {
+					$cond: [
+						{ $eq: ['$status', 'Discarded'] },
+						'Discarded',
+						{
+							$cond: [
+								{ $eq: ['$status', 'Issued'] },
+								'Issued',
+								{
+									$cond: [
+										{
+											$or: [
+												{ $eq: ['$status', 'Expired'] },
+												{
+													$and: [
+														{ $ne: ['$expiryDate', null] },
+														{ $lte: ['$expiryDate', now] },
+													],
+												},
+											],
+										},
+										'Expired',
+										{
+											$cond: [
+												{ $eq: ['$status', 'Reserved'] },
+												'Reserved',
+												{
+													$cond: [
+														{
+															$and: [
+																{ $eq: ['$status', 'Available'] },
+																{ $eq: ['$clearance.isVerified', true] },
+																{ $eq: ['$testing.hiv', 'Non_Reactive'] },
+																{ $eq: ['$testing.hbv', 'Non_Reactive'] },
+																{ $eq: ['$testing.hcv', 'Non_Reactive'] },
+																{ $eq: ['$testing.syphilis', 'Non_Reactive'] },
+																{ $eq: ['$testing.malaria', 'Non_Reactive'] },
+															],
+														},
+														'Available',
+														{
+															$cond: [
+																{ $eq: ['$status', 'Tested_Passed'] },
+																'Tested_Passed',
+																'Quarantined',
+															],
+														},
+													],
+												},
+											],
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+			},
+		},
+		{
 			$group: {
-				_id: '$status',
+				_id: '$category',
 				count: { $sum: 1 },
 			},
 		},

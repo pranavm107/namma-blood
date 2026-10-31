@@ -13,7 +13,12 @@ const { protectBloodbankOrStaff } = require('../BloodBank/bloodbankStaffMiddlewa
 const router = express.Router()
 
 // Legacy Stock Endpoints (Preserved for backward compatibility)
-router.route('/getstock').get(selectBloodbankModel, protect, getStock)
+router
+	.route('/getstock')
+	.get(
+		protectBloodbankOrStaff('Staff_Admin', 'Medical_Officer', 'Lab_Technician'),
+		getStock
+	)
 router.route('/updatestock').patch(selectBloodbankModel, protect, updatStock)
 
 // Phase 3.7: Inventory Reconciliation & Safe Migration Endpoints

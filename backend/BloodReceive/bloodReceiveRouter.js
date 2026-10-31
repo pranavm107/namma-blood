@@ -18,16 +18,25 @@ const {
 	selectBloodbankModel,
 } = require('../Common/Middlewares/selectModels')
 const { protect } = require('../Login_And_Authentication/authMiddleware')
+const {
+	protectBloodbankOrStaff,
+} = require('../BloodBank/bloodbankStaffMiddleware')
 
 router.route('/addrequest').post(selectUserModel, protect, addRequest)
 
 router
 	.route('/acceptrequest')
-	.patch(selectBloodbankModel, protect, acceptRequest)
+	.patch(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		acceptRequest
+	)
 
 router
 	.route('/rejectrequest')
-	.patch(selectBloodbankModel, protect, rejectRequest)
+	.patch(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		rejectRequest
+	)
 
 router
 	.route('/editreceiverequest')
@@ -39,22 +48,34 @@ router
 
 router
 	.route('/fulfilledrequest')
-	.patch(selectBloodbankModel, protect, fulfilledRequest)
+	.patch(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		fulfilledRequest
+	)
 
 router.route('/getuserstates').get(selectUserModel, protect, getUserStates)
 
 router
 	.route('/getbloodbankstates')
-	.get(selectBloodbankModel, protect, getBloodbankStates)
+	.get(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		getBloodbankStates
+	)
 
 router.route('/getuserdata').get(selectUserModel, protect, getUserData)
 
 router
 	.route('/getbloodbankdata')
-	.get(selectBloodbankModel, protect, getBloodbankData)
+	.get(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		getBloodbankData
+	)
 
 router
 	.route('/getbloodbankdataquery')
-	.get(selectBloodbankModel, protect, getBloodbankDataQuery)
+	.get(
+		protectBloodbankOrStaff('Medical_Officer', 'Lab_Technician', 'Staff_Admin'),
+		getBloodbankDataQuery
+	)
 
 module.exports = router

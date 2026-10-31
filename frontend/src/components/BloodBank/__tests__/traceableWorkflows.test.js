@@ -119,11 +119,10 @@ describe('Traceable Inventory Business Rules & Clinical Safeguards', () => {
 			const validDiscardReasons = [
 				'TTI_Reactive',
 				'Expired',
-				'Hemolyzed',
+				'Hemolysis',
+				'Bag_Leakage',
 				'Clotted',
-				'Bag_Leak',
-				'Temperature_Abuse',
-				'Contaminated',
+				'Temperature_Excursion',
 				'Other',
 			]
 
@@ -190,6 +189,105 @@ describe('Traceable Inventory Business Rules & Clinical Safeguards', () => {
 
 			expect(duplicates).toContain('DIN-001')
 			expect(duplicates.length).toBe(1)
+		})
+	})
+
+	describe('Traceable Inventory Summary Counters & Breakdown Calculation', () => {
+		const unit1 = {
+			unitNumber: 'DIN-2026295-2E36F2-WB',
+			bloodGroup: 'B_Positive',
+			componentType: 'Whole_Blood',
+			status: 'Quarantined',
+			testing: {
+				hiv: 'Pending',
+				hbv: 'Pending',
+				hcv: 'Pending',
+				syphilis: 'Pending',
+				malaria: 'Pending',
+			},
+			clearance: { isVerified: false },
+			expiryDate: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+		}
+
+		const unit2 = {
+			unitNumber: 'DIN-001',
+			bloodGroup: 'A_Positive',
+			componentType: 'Whole_Blood',
+			status: 'Tested_Passed',
+			testing: {
+				hiv: 'Non_Reactive',
+				hbv: 'Non_Reactive',
+				hcv: 'Non_Reactive',
+				syphilis: 'Non_Reactive',
+				malaria: 'Non_Reactive',
+			},
+			clearance: { isVerified: false },
+			isLegacyMigrated: true,
+			expiryDate: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+		}
+
+		it('calculates exact counts for all 7 lifecycle categories with Unit 1 and Unit 2', () => {
+			const deriveStatusBreakdown = (unitsList, backendBreakdown = null) => {
+				if (backendBreakdown) return backendBreakdown
+
+				const now = new Date()
+				const counts = {
+					Available: 0,
+					Quarantined: 0,
+					Tested_Passed: 0,
+					Reserved: 0,
+					Issued: 0,
+					Expired: 0,
+					Discarded: 0,
+					totalUnits: unitsList.length,
+				}
+
+				for (const u of unitsList) {
+					const isExpired = u.status === 'Expired' || (u.expiryDate && new Date(u.expiryDate) <= now)
+					if (u.status === 'Discarded') counts.Discarded++
+					else if (u.status === 'Issued') counts.Issued++
+					else if (isExpired) counts.Expired++
+					else if (u.status === 'Reserved') counts.Reserved++
+					else if (u.status === 'Available' && u.clearance?.isVerified) counts.Available++
+					else if (u.status === 'Tested_Passed') counts.Tested_Passed++
+					else counts.Quarantined++
+				}
+				return counts
+			}
+
+			const breakdown = deriveStatusBreakdown([unit1, unit2])
+
+			expect(breakdown.Quarantined).toBe(1)
+			expect(breakdown.Tested_Passed).toBe(1)
+			expect(breakdown.Available).toBe(0)
+			expect(breakdown.Reserved).toBe(0)
+			expect(breakdown.Issued).toBe(0)
+			expect(breakdown.Expired).toBe(0)
+			expect(breakdown.Discarded).toBe(0)
+			expect(breakdown.totalUnits).toBe(2)
+		})
+
+		it('strictly restricts clearance permission to authenticated Medical Officer', () => {
+			const checkCanClear = (userRole, unit) => {
+				const isMedicalOfficer = userRole === 'Medical_Officer'
+				const isExpired = unit.expiryDate && new Date(unit.expiryDate) <= new Date()
+				return Boolean(isMedicalOfficer && unit.status === 'Tested_Passed' && !unit.clearance?.isVerified && !isExpired)
+			}
+
+			// Medical Officer can clear Tested_Passed unit
+			expect(checkCanClear('Medical_Officer', unit2)).toBe(true)
+
+			// Lab Technician cannot clear
+			expect(checkCanClear('Lab_Technician', unit2)).toBe(false)
+
+			// Staff Admin cannot clear
+			expect(checkCanClear('Staff_Admin', unit2)).toBe(false)
+
+			// Generic blood bank cannot clear
+			expect(checkCanClear('', unit2)).toBe(false)
+
+			// Quarantined unit cannot be cleared even by Medical Officer
+			expect(checkCanClear('Medical_Officer', unit1)).toBe(false)
 		})
 	})
 })

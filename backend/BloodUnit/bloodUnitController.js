@@ -21,6 +21,7 @@ const {
 	recordPhysicalDispatch,
 	VALID_CROSSMATCH_RESULTS,
 } = require('./issuanceService')
+const stockService = require('../BloodStock/stockService')
 
 const VALID_TEST_RESULTS = ['Pending', 'Non_Reactive', 'Reactive']
 
@@ -418,7 +419,8 @@ const getBloodUnits = catchAsync(async (req, res, next) => {
 
 	const searchTerm = (q || search || '').trim()
 	if (searchTerm) {
-		query.unitNumber = { $regex: searchTerm, $options: 'i' }
+		const escaped = searchTerm.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')
+		query.unitNumber = { $regex: escaped, $options: 'i' }
 	}
 
 	if (bloodGroup && VALID_BLOOD_GROUPS.includes(bloodGroup)) {
@@ -459,10 +461,21 @@ const getBloodUnits = catchAsync(async (req, res, next) => {
 	const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10))
 	const skip = (pageNum - 1) * limitNum
 
+	const ALLOWED_SORT_FIELDS = [
+		'createdAt',
+		'updatedAt',
+		'unitNumber',
+		'expiryDate',
+		'collectionDate',
+		'bloodGroup',
+		'status',
+		'volumeMl',
+	]
+	const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt'
 	const sortDirection = sortOrder === 'asc' ? 1 : -1
-	const sortOptions = { [sortBy]: sortDirection }
+	const sortOptions = { [safeSortBy]: sortDirection }
 
-	const [units, total] = await Promise.all([
+	const [units, total, statusBreakdown] = await Promise.all([
 		BloodUnit.find(query)
 			.select('-donorUserId -donationRequestId')
 			.sort(sortOptions)
@@ -470,6 +483,7 @@ const getBloodUnits = catchAsync(async (req, res, next) => {
 			.limit(limitNum)
 			.lean(),
 		BloodUnit.countDocuments(query),
+		stockService.getTraceableStatusBreakdown(bloodbankId),
 	])
 
 	return res.status(200).json({
@@ -478,6 +492,7 @@ const getBloodUnits = catchAsync(async (req, res, next) => {
 		page: pageNum,
 		limit: limitNum,
 		totalPages: Math.ceil(total / limitNum) || 1,
+		statusBreakdown,
 	})
 })
 

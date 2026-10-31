@@ -59,6 +59,7 @@ async function generateReconciliationReport({
 	if (!isValidObjectId(bloodbankId)) {
 		const err = new Error('Valid bloodbankId is required to generate reconciliation report.')
 		err.statusCode = 400
+		err.isOperational = true
 		throw err
 	}
 
@@ -122,6 +123,7 @@ async function generateReconciliationReport({
 			traceableTestedPassed: 0,
 			traceableReserved: 0,
 			traceableIssued: 0,
+			traceableDispatched: 0,
 			traceableDiscarded: 0,
 			traceableExpired: 0,
 			traceableOther: 0,
@@ -259,7 +261,11 @@ async function generateReconciliationReport({
 				groupSummary.traceableTotalActive++
 				break
 			case 'Issued':
-				groupSummary.traceableIssued++
+				if (unit.issuance?.dispatch?.isDispatched) {
+					groupSummary.traceableDispatched++
+				} else {
+					groupSummary.traceableIssued++
+				}
 				break
 			case 'Discarded':
 				groupSummary.traceableDiscarded++
@@ -417,7 +423,7 @@ async function generateReconciliationReport({
 /**
  * Validates a single item in a migration manifest.
  */
-function validateManifestItem(item, index, now = new Date()) {
+function validateManifestItem(item, index, now = new Date(), isExecute = false) {
 	const errors = []
 
 	if (!item || typeof item !== 'object') {
@@ -427,6 +433,13 @@ function validateManifestItem(item, index, now = new Date()) {
 	const unitNumber = typeof item.unitNumber === 'string' ? item.unitNumber.trim().toUpperCase() : ''
 	if (!unitNumber) {
 		errors.push(`Row ${index + 1}: Unique Unit Number (DIN / Barcode) is required.`)
+	} else if (isExecute) {
+		const isPlaceholder = /^(DIN-LEG-|SAMPLE|TEST|MOCK|PLACEHOLDER|DEMO)/i.test(unitNumber)
+		if (isPlaceholder) {
+			errors.push(
+				`Row ${index + 1}: Clinical safety violation: Placeholder or sample DIN '${unitNumber}' cannot be executed into real physical inventory. Barcode must correspond to a verified physical blood unit bag.`
+			)
+		}
 	}
 
 	const bloodGroup = item.bloodGroup
@@ -436,7 +449,10 @@ function validateManifestItem(item, index, now = new Date()) {
 		)
 	}
 
-	const componentType = item.componentType || 'Whole_Blood'
+	let componentType = item.componentType || 'Whole_Blood'
+	if (componentType === 'Platelets') {
+		componentType = 'Platelet_Concentrate'
+	}
 	if (!VALID_COMPONENT_TYPES.includes(componentType)) {
 		errors.push(
 			`Row ${index + 1}: Invalid component type '${componentType}'. Must be one of: ${VALID_COMPONENT_TYPES.join(', ')}.`
@@ -460,6 +476,12 @@ function validateManifestItem(item, index, now = new Date()) {
 	}
 
 	const deductFromLegacy = item.deductFromLegacy !== false
+
+	if (deductFromLegacy && componentType !== 'Whole_Blood') {
+		errors.push(
+			`Row ${index + 1}: Unsupported component mapping: Legacy aggregate stock represents whole-blood collections only. Direct 1:1 legacy deduction is permitted only for 'Whole_Blood'. Fractionated components ('${componentType}') must be ingested with deductFromLegacy: false to prevent inventory distortion.`
+		)
+	}
 
 	return {
 		isValid: errors.length === 0,
@@ -518,6 +540,7 @@ async function executeInventoryMigration({
 	if (!isValidObjectId(bloodbankId)) {
 		const err = new Error('Valid bloodbankId is required for inventory migration.')
 		err.statusCode = 400
+		err.isOperational = true
 		throw err
 	}
 
@@ -529,12 +552,14 @@ async function executeInventoryMigration({
 	if (!Array.isArray(migrationManifest)) {
 		const err = new Error('migrationManifest must be an array of physical blood units.')
 		err.statusCode = 400
+		err.isOperational = true
 		throw err
 	}
 
 	if (isExecute && !actorId) {
 		const err = new Error('Authenticated actorId is strictly required to execute migration.')
 		err.statusCode = 401
+		err.isOperational = true
 		throw err
 	}
 
@@ -546,7 +571,7 @@ async function executeInventoryMigration({
 
 	for (let i = 0; i < migrationManifest.length; i++) {
 		const item = migrationManifest[i]
-		const res = validateManifestItem(item, i, now)
+		const res = validateManifestItem(item, i, now, isExecute)
 		if (!res.isValid) {
 			validationErrors.push(...res.errors)
 		} else {
@@ -706,6 +731,7 @@ async function executeInventoryMigration({
 		)
 		err.statusCode = 400
 		err.details = validationErrors
+		err.isOperational = true
 		throw err
 	}
 
@@ -720,6 +746,7 @@ async function executeInventoryMigration({
 		if (!activeLegacyStock) {
 			const err = new Error('Legacy Bloodstock document not found for this blood bank.')
 			err.statusCode = 404
+			err.isOperational = true
 			throw err
 		}
 
@@ -739,6 +766,7 @@ async function executeInventoryMigration({
 						`Atomic deduction failed: Insufficient legacy stock for ${bg} during write lock. Another transaction may have modified stock.`
 					)
 					err.statusCode = 409
+					err.isOperational = true
 					throw err
 				}
 			}
@@ -906,6 +934,7 @@ async function getReconciliationHistory({ bloodbankId, limit = 20, skip = 0 }) {
 	if (!isValidObjectId(bloodbankId)) {
 		const err = new Error('Valid bloodbankId is required.')
 		err.statusCode = 400
+		err.isOperational = true
 		throw err
 	}
 

@@ -15,7 +15,7 @@ import bgimg from '../../image/background.png'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Tooltip } from '@mui/material'
+import { Tooltip, Chip } from '@mui/material'
 import MuiAppBar from '@mui/material/AppBar'
 import LogoutIcon from '@mui/icons-material/Logout'
 import AccountBoxIcon from '@mui/icons-material/AccountBox'
@@ -84,7 +84,9 @@ const Dashboard = (props) => {
 		role === 'USER' && !isLoading
 			? `Welcome, ${user?.firstName} ${user?.lastName} | Namma Blood`
 			: role === 'BLOODBANK' && !isLoading
-			? `Welcome, ${user?.bloodbankName} | Namma Blood`
+			? user?.isStaff && (user?.staff?.fullName || user?.fullName)
+				? `Welcome, ${user?.staff?.fullName || user?.fullName} (${user?.bloodbankName || 'Staff'}) | Namma Blood`
+				: `Welcome, ${user?.bloodbankName || 'Blood Bank'} | Namma Blood`
 			: role === '' && !isLoading
 			? 'Namma Blood — Every Drop Matters. Every Life Counts.'
 			: 'Namma Blood'
@@ -156,7 +158,27 @@ const Dashboard = (props) => {
 						<Toolbar disableGutters>
 							{isLoggedin && (
 								<>
-									<Box sx={{ flexGrow: 0 }}>
+									<Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
+										{role === 'BLOODBANK' && (
+											<Chip
+												label={
+													user?.isStaff
+														? (user?.staffRole || user?.role || 'Staff').replace('_', ' ')
+														: 'Blood Bank Admin'
+												}
+												size='small'
+												sx={{
+													bgcolor: user?.staffRole === 'Medical_Officer' ? '#10b981' : '#0284c7',
+													color: '#ffffff',
+													fontWeight: 700,
+													fontSize: '0.72rem',
+													letterSpacing: '0.03em',
+													mr: 2,
+													boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+												}}
+											/>
+										)}
+
 										{role === 'USER' && (
 											<Tooltip title='Profile'>
 												<IconButton

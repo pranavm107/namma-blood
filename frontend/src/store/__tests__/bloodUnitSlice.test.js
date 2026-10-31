@@ -19,6 +19,7 @@ describe('bloodUnitSlice', () => {
 		limit: 10,
 		totalPages: 1,
 		selectedUnit: null,
+		statusBreakdown: null,
 		isLoading: false,
 		isDetailLoading: false,
 		isActionSubmitting: false,

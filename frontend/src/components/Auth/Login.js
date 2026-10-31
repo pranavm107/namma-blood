@@ -17,7 +17,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
-import { loginAdmin, loginBloodbank, loginUser } from '../../store/loginslice'
+import { loginAdmin, loginBloodbank, loginStaff, loginUser } from '../../store/loginslice'
 
 const theme = createTheme({
 	palette: {
@@ -54,6 +54,12 @@ const Login = () => {
 			icon: <LocalHospitalIcon />,
 			badgeColor: '#0284c7',
 		},
+		staff: {
+			title: 'Medical Officer & Staff Portal',
+			subtitle: 'Clinical verification, laboratory screening, and inventory operations',
+			icon: <LocalHospitalIcon />,
+			badgeColor: '#059669',
+		},
 		user: {
 			title: 'Donor & Recipient Login',
 			subtitle: 'Sign in to schedule donations or request life-saving blood units',
@@ -79,7 +85,7 @@ const Login = () => {
 
 	const validateInputs = () => {
 		let err = 0
-		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,3}$/
+		const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 		if (!emailRegex.test(user?.email)) {
 			setErrors((prev) => ({ ...prev, emailError: 'Please enter a valid email address.' }))
 			err++
@@ -116,6 +122,16 @@ const Login = () => {
 					navigate('/bloodbank')
 				} else if (response?.meta?.requestStatus === 'rejected') {
 					toast.error(response?.payload?.message || 'Login failed.')
+				} else {
+					toast.error('Something went wrong. Please try again later.')
+				}
+			} else if (role === 'staff') {
+				const response = await dispatch(loginStaff(user))
+				if (response?.meta?.requestStatus === 'fulfilled') {
+					toast.success('Staff authenticated successfully.')
+					navigate('/bloodbank/inventory')
+				} else if (response?.meta?.requestStatus === 'rejected') {
+					toast.error(response?.payload?.message || 'Staff login failed.')
 				} else {
 					toast.error('Something went wrong. Please try again later.')
 				}
@@ -262,6 +278,34 @@ const Login = () => {
 								)}
 							</Grid>
 						</Grid>
+
+						{role === 'bloodbank' && (
+							<Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #f1f5f9', width: '100%', textAlign: 'center' }}>
+								<Typography variant='body2' sx={{ color: '#64748b', fontSize: '0.8rem' }}>
+									Medical Officer or Laboratory Staff?{' '}
+									<Link
+										to='/login/staff'
+										style={{ color: '#059669', fontWeight: 700, textDecoration: 'none' }}
+									>
+										Sign in via Staff Portal &rarr;
+									</Link>
+								</Typography>
+							</Box>
+						)}
+
+						{role === 'staff' && (
+							<Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #f1f5f9', width: '100%', textAlign: 'center' }}>
+								<Typography variant='body2' sx={{ color: '#64748b', fontSize: '0.8rem' }}>
+									Institutional Administrator?{' '}
+									<Link
+										to='/login/bloodbank'
+										style={{ color: '#0284c7', fontWeight: 700, textDecoration: 'none' }}
+									>
+										Sign in with Blood Bank Account &rarr;
+									</Link>
+								</Typography>
+							</Box>
+						)}
 					</Box>
 				</Paper>
 			</Container>

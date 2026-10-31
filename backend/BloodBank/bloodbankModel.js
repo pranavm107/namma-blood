@@ -1,6 +1,40 @@
 const mongoose = require('mongoose')
 const bcryptjs = require('bcryptjs')
 const crypto = require('crypto')
+const pointSchema = new mongoose.Schema(
+	{
+		type: {
+			type: String,
+			enum: ['Point'],
+			default: 'Point',
+			required: true,
+		},
+		coordinates: {
+			type: [Number], // [longitude, latitude]
+			required: true,
+			validate: {
+				validator: function (val) {
+					if (!val || val.length === 0) return true
+					return (
+						Array.isArray(val) &&
+						val.length === 2 &&
+						typeof val[0] === 'number' &&
+						!isNaN(val[0]) &&
+						val[0] >= -180 &&
+						val[0] <= 180 &&
+						typeof val[1] === 'number' &&
+						!isNaN(val[1]) &&
+						val[1] >= -90 &&
+						val[1] <= 90
+					)
+				},
+				message:
+					'Coordinates must be valid [longitude, latitude] where longitude is between -180 and 180 and latitude is between -90 and 90.',
+			},
+		},
+	},
+	{ _id: false }
+)
 
 const schema = new mongoose.Schema(
 	{
@@ -84,9 +118,30 @@ const schema = new mongoose.Schema(
 			type: Number,
 			default: 0,
 		},
+		location: {
+			type: pointSchema,
+			required: false,
+			default: undefined,
+		},
 	},
 	{ timestamps: true }
 )
+
+// Clean up incomplete location structures before validation for existing record compatibility
+schema.pre('validate', function (next) {
+	if (
+		this.location &&
+		(!this.location.coordinates ||
+			this.location.coordinates.length === 0 ||
+			!Array.isArray(this.location.coordinates))
+	) {
+		this.set('location', undefined)
+	}
+	next()
+})
+
+// Sparse 2dsphere index for optional geospatial matching
+schema.index({ location: '2dsphere' }, { sparse: true })
 
 schema.pre('save', async function (next) {
 	if (!this.isModified('password')) return next()

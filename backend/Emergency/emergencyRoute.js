@@ -1,0 +1,16 @@
+/**
+ * Emergency Blood Connection Route Definitions
+ * Namma Blood — Emergency Blood Connection (Milestone 4.3)
+ */
+
+const express = require('express')
+const router = express.Router()
+
+const { protectEmergencyAuth } = require('./emergencyAuthMiddleware')
+const { discoveryRateLimiter } = require('./discoveryRateLimiter')
+const { getNearbyDonors } = require('./emergencyDiscoveryController')
+
+// Sub-Milestone 4.3.1: Authenticated nearby donor discovery with rate limiting
+router.route('/discover/donors').get(protectEmergencyAuth, discoveryRateLimiter, getNearbyDonors)
+
+module.exports = router

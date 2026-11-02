@@ -31,7 +31,7 @@ const protectEmergencyAuth = catchAsync(async (req, res, next) => {
 	if (!token) {
 		return res.status(401).json({
 			status: 'fail',
-			message: 'Authentication required. You must be logged in to discover emergency donors.',
+			message: 'Authentication required. You must be logged in to access emergency discovery.',
 		})
 	}
 

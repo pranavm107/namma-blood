@@ -46,6 +46,14 @@ async function getTraceableAvailableStock(bloodbankId, options = {}) {
 		matchCriteria[`testing.${test}`] = 'Non_Reactive'
 	}
 
+	if (options.componentType) {
+		matchCriteria.componentType = options.componentType
+	}
+
+	if (options.bloodGroup) {
+		matchCriteria.bloodGroup = options.bloodGroup
+	}
+
 	const pipeline = [
 		{ $match: matchCriteria },
 		{
@@ -70,6 +78,42 @@ async function getTraceableAvailableStock(bloodbankId, options = {}) {
 	}
 
 	return verifiedMap
+}
+
+/**
+ * Retrieves the distinct available component types for a blood bank meeting all issue-eligible criteria.
+ *
+ * @param {string|mongoose.Types.ObjectId} bloodbankId
+ * @param {Object} [options]
+ * @param {string} [options.bloodGroup]
+ * @param {Date} [options.now=new Date()]
+ * @returns {Promise<string[]>}
+ */
+async function getTraceableAvailableComponents(bloodbankId, options = {}) {
+	const now = options.now || new Date()
+	const bbObjectId = new mongoose.Types.ObjectId(bloodbankId)
+
+	const matchCriteria = {
+		bloodbankId: bbObjectId,
+		status: 'Available',
+		expiryDate: { $gt: now },
+		'clearance.isVerified': true,
+	}
+
+	for (const test of MANDATORY_TTI_TESTS) {
+		matchCriteria[`testing.${test}`] = 'Non_Reactive'
+	}
+
+	if (options.bloodGroup) {
+		matchCriteria.bloodGroup = options.bloodGroup
+	}
+
+	if (options.componentType) {
+		matchCriteria.componentType = options.componentType
+	}
+
+	const results = await BloodUnit.distinct('componentType', matchCriteria)
+	return results
 }
 
 /**
@@ -341,6 +385,7 @@ async function checkIssueEligibleAvailability(
 module.exports = {
 	createZeroedStockMap,
 	getTraceableAvailableStock,
+	getTraceableAvailableComponents,
 	getLegacyStock,
 	getTraceableStatusBreakdown,
 	getConsolidatedStock,

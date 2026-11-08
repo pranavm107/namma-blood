@@ -1,0 +1,33 @@
+$kind: http-request
+description: Authenticates a platform system administrator and updates `{{token}}`.
+url: "{{baseUrl}}/api/admin/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "admin@nammablood.org",
+      "password": "Password_123"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has success message and JWT token", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message", "Login Successfully.");
+          pm.expect(jsonData).to.have.property("token");
+          pm.expect(jsonData.token).to.be.a("string");
+          
+          pm.environment.set("token", jsonData.token);
+          console.log("Admin token saved to environment.");
+      });
+    language: text/javascript
+order: 2000

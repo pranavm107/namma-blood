@@ -1,0 +1,58 @@
+$kind: http-request
+name: 3.1 GET Discover Blood Banks - Geospatial with Stock Verification [200 OK]
+description: Discovers active blood banks in vicinity and verifies issue-eligible traceable inventory against Phase 3 safety gates.
+url: "{{baseUrl}}/api/emergency/discover/bloodbanks?bloodGroup=B_Positive&componentType=Packed_Red_Blood_Cells&latitude=12.9716&longitude=77.5946&radiusKm=15&page=1&limit=10"
+method: GET
+queryParams:
+  - key: bloodGroup
+    value: B_Positive
+    description: Optional blood group filter
+  - key: componentType
+    value: Packed_Red_Blood_Cells
+    description: Optional component type filter
+  - key: latitude
+    value: "12.9716"
+    description: Search latitude [-90 to +90]
+  - key: longitude
+    value: "77.5946"
+    description: Search longitude [-180 to +180]
+  - key: radiusKm
+    value: "15"
+    description: Search radius [1 to 50 km]
+  - key: page
+    value: "1"
+  - key: limit
+    value: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Structure includes sanitized facility metadata & governance", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("searchCriteria");
+          pm.expect(jsonData).to.have.property("pagination");
+          pm.expect(jsonData).to.have.property("data");
+          pm.expect(jsonData).to.have.property("governance");
+          
+          pm.expect(jsonData.governance.cannotAuthorizeIssuance).to.eql(true);
+          pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);
+          pm.expect(jsonData.governance.requiresLaboratoryCrossmatch).to.eql(true);
+      });
+
+      pm.test("Sanitizes facility reference format (BB-XXXXXXXXXXXX)", function () {
+          var jsonData = pm.response.json();
+          if (jsonData.data && jsonData.data.length > 0) {
+              var bank = jsonData.data[0];
+              pm.expect(bank).to.not.have.property("_id");
+              pm.expect(bank).to.not.have.property("password");
+              pm.expect(bank).to.have.property("facilityRef");
+              pm.expect(bank.facilityRef).to.match(/^BB-[0-9A-F]{12}$/);
+              pm.expect(bank).to.have.property("inventoryTrustStatus");
+              pm.expect(["Verified_Available", "No_Matching_Stock", "Inventory_Unverified"]).to.include(bank.inventoryTrustStatus);
+          }
+      });
+    language: text/javascript
+order: 1000

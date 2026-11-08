@@ -1,0 +1,15 @@
+$kind: http-request
+name: 4.7 GET Request Matches - Unauthenticated Access [401 Unauthorized]
+description: "Negative Test: Matching endpoint without Bearer authentication returns HTTP 401."
+url: "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 401 Unauthorized", function () {
+          pm.response.to.have.status(401);
+      });
+    language: text/javascript
+order: 7000

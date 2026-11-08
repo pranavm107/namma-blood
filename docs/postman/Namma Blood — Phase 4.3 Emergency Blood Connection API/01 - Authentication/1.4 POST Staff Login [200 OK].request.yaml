@@ -1,0 +1,34 @@
+$kind: http-request
+description: Authenticates an active blood bank staff member (Medical Officer, Staff Admin, Lab Tech) with signed role payload and updates `{{token}}`.
+url: "{{baseUrl}}/api/bloodbank/staff/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "mo.adyar@nammablood.internal",
+      "password": "63u^HTRSjXTs2ac"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Staff login returns message, token, and staff profile", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message", "Staff login successful.");
+          pm.expect(jsonData).to.have.property("token");
+          pm.expect(jsonData).to.have.property("staff");
+          pm.expect(jsonData.staff).to.have.property("role");
+          
+          pm.environment.set("token", jsonData.token);
+          console.log("Staff token saved to environment. Role:", jsonData.staff.role);
+      });
+    language: text/javascript
+order: 4000

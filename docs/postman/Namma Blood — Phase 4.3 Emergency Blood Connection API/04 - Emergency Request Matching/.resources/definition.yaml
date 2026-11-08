@@ -1,0 +1,3 @@
+$kind: collection
+description: Dual-stream matching engine for verified emergency requests (`GET /api/emergency/requests/:id/matches`), featuring strict BOLA/IDOR protection, independent pagination, and HMAC candidate referencing.
+order: 4000

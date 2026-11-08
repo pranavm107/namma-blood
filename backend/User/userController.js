@@ -3,7 +3,7 @@ const catchAsync = require('../Utils/catchAsync')
 const { registerUserEmail } = require('../Utils/emailContant')
 
 const SAFE_USER_FIELDS =
-	'_id firstName lastName gender dob age phoneNo1 phoneNo2 email state city address pinCode status createdAt updatedAt'
+	'_id firstName lastName gender dob age phoneNo1 phoneNo2 email state city address pinCode status role accountStatus credentialStatus hospitalId representativeStatus medicalRegistrationNumber medicalCouncil registrationState createdAt updatedAt'
 
 const ALLOWED_UPDATE_FIELDS = [
 	'firstName',

@@ -60,6 +60,12 @@ const Login = () => {
 			icon: <LocalHospitalIcon />,
 			badgeColor: '#059669',
 		},
+		'medical-officer': {
+			title: 'Hospital Medical Officer Portal',
+			subtitle: 'Authorize and clinically verify emergency blood transfusion requests',
+			icon: <LocalHospitalIcon />,
+			badgeColor: '#059669',
+		},
 		user: {
 			title: 'Donor & Recipient Login',
 			subtitle: 'Sign in to schedule donations or request life-saving blood units',
@@ -105,11 +111,16 @@ const Login = () => {
 		const isValid = validateInputs()
 
 		if (isValid) {
-			if (role === 'user') {
+			if (role === 'user' || role === 'medical-officer') {
 				const response = await dispatch(loginUser(user))
 				if (response?.meta?.requestStatus === 'fulfilled') {
 					toast.success('Logged in successfully.')
-					navigate('/user')
+					const resolvedRole = response?.payload?.role || 'USER'
+					if (resolvedRole === 'MEDICAL_OFFICER') {
+						navigate('/medical-officer')
+					} else {
+						navigate('/user')
+					}
 				} else if (response?.meta?.requestStatus === 'rejected') {
 					toast.error(response?.payload?.message || 'Login failed.')
 				} else {
@@ -274,6 +285,19 @@ const Login = () => {
 										}}
 									>
 										Create account
+									</Link>
+								)}
+								{(role === 'medical-officer' || role === 'staff') && (
+									<Link
+										to='/medical-officer/register'
+										style={{
+											fontSize: '0.85rem',
+											color: '#059669',
+											fontWeight: 600,
+											textDecoration: 'none',
+										}}
+									>
+										Register as Doctor
 									</Link>
 								)}
 							</Grid>

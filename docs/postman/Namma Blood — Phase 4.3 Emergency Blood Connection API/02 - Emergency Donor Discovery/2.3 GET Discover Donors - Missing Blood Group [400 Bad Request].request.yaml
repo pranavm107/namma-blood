@@ -1,0 +1,21 @@
+$kind: http-request
+description: "Negative Test: Verifies that omitting the mandatory `bloodGroup` parameter fails closed with HTTP 400."
+url: "{{baseUrl}}/api/emergency/discover/donors?latitude=12.9716&longitude=77.5946"
+method: GET
+queryParams:
+  latitude: "12.9716"
+  longitude: "77.5946"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Rejects request with mandatory blood group notice", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Recipient blood group is mandatory");
+      });
+    language: text/javascript
+order: 3000

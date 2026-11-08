@@ -1,0 +1,27 @@
+$kind: http-request
+name: 2.2 GET Discover Donors - Administrative Fallback (City/State) [200 OK]
+description: Demonstrates location fallback query by city and state when client GPS coordinates are unavailable.
+url: "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=O_Negative&componentType=Whole_Blood&city=Bengaluru&state=Karnataka&page=1&limit=10"
+method: GET
+queryParams:
+  bloodGroup: O_Negative
+  componentType: Whole_Blood
+  city: Bengaluru
+  state: Karnataka
+  page: "1"
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Operates in administrative fallback mode", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(false);
+          pm.expect(jsonData.searchCriteria.city).to.eql("Bengaluru");
+          pm.expect(jsonData.searchCriteria.state).to.eql("Karnataka");
+      });
+    language: text/javascript
+order: 2000

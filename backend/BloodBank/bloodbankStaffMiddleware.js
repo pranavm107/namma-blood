@@ -8,6 +8,12 @@ const { BloodbankStaff } = require('./bloodbankStaffModel')
  * owning blood bank reference, explicit validated role, mustChangePassword flag, and tokenVersion.
  */
 function generateStaffToken(staff) {
+	const secret = process.env.JWT_SECRET
+	if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+		const err = new Error('Server configuration error: JWT_SECRET environment variable is not configured.')
+		err.statusCode = 500
+		throw err
+	}
 	const payload = {
 		id: staff._id,
 		bloodbankId: staff.bloodbankId,
@@ -16,7 +22,7 @@ function generateStaffToken(staff) {
 		tokenVersion: typeof staff.tokenVersion === 'number' ? staff.tokenVersion : 0,
 		userType: 'staff',
 	}
-	return jwt.sign(payload, process.env.JWT_SECRET || 'test_jwt_secret_key_12345', {
+	return jwt.sign(payload, secret, {
 		expiresIn: process.env.JWT_EXPIRES_IN || '8h',
 	})
 }
@@ -40,9 +46,17 @@ const protectStaff = catchAsync(async (req, res, next) => {
 		})
 	}
 
+	const secret = process.env.JWT_SECRET
+	if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+		return res.status(500).json({
+			status: 'error',
+			message: 'Server configuration error: JWT_SECRET environment variable is not configured.',
+		})
+	}
+
 	let decoded = null
 	try {
-		decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET || 'test_jwt_secret_key_12345')
+		decoded = await promisify(jwt.verify)(token, secret)
 	} catch (err) {
 		return res.status(401).json({
 			message: 'Invalid staff token. Authentication failed.',
@@ -191,11 +205,19 @@ function protectBloodbankOrStaff(...allowedStaffRoles) {
 			})
 		}
 
+		const secret = process.env.JWT_SECRET
+		if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+			return res.status(500).json({
+				status: 'error',
+				message: 'Server configuration error: JWT_SECRET environment variable is not configured.',
+			})
+		}
+
 		let decoded = null
 		try {
 			decoded = await promisify(jwt.verify)(
 				token,
-				process.env.JWT_SECRET || 'test_jwt_secret_key_12345'
+				secret
 			)
 		} catch (err) {
 			return res.status(401).json({

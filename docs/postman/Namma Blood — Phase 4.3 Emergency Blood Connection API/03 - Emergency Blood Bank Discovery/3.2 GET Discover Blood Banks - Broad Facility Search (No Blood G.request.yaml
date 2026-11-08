@@ -1,0 +1,24 @@
+$kind: http-request
+name: 3.2 GET Discover Blood Banks - Broad Facility Search (No Blood Group Filter) [200 OK]
+description: Demonstrates that blood bank discovery does not mandate bloodGroup, enabling facility directory searches.
+url: "{{baseUrl}}/api/emergency/discover/bloodbanks?latitude=12.9716&longitude=77.5946&radiusKm=20&page=1&limit=10"
+method: GET
+queryParams:
+  latitude: "12.9716"
+  longitude: "77.5946"
+  radiusKm: "20"
+  page: "1"
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Broad search runs without bloodGroup constraint", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.searchCriteria.bloodGroup).to.eql(null);
+      });
+    language: text/javascript
+order: 2000

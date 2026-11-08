@@ -35,11 +35,19 @@ const protectEmergencyAuth = catchAsync(async (req, res, next) => {
 		})
 	}
 
+	const secret = process.env.JWT_SECRET
+	if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+		return res.status(500).json({
+			status: 'error',
+			message: 'Server configuration error: JWT_SECRET environment variable is not configured.',
+		})
+	}
+
 	let decoded = null
 	try {
 		decoded = await promisify(jwt.verify)(
 			token,
-			process.env.JWT_SECRET || 'test_jwt_secret_key_12345'
+			secret
 		)
 	} catch (err) {
 		return res.status(401).json({
@@ -102,7 +110,15 @@ const protectEmergencyAuth = catchAsync(async (req, res, next) => {
 	let currentUser = await userModel.findById(decoded.id).select('+password')
 	let userRole = 'USER'
 
-	if (!currentUser) {
+	if (currentUser) {
+		if (currentUser.role === 'MEDICAL_OFFICER') {
+			userRole = 'MEDICAL_OFFICER'
+		} else if (currentUser.role === 'HOSPITAL_ADMIN') {
+			userRole = 'HOSPITAL_ADMIN'
+		} else {
+			userRole = 'USER'
+		}
+	} else {
 		currentUser = await Bloodbank.findById(decoded.id).select('+password')
 		if (currentUser) {
 			userRole = 'BLOODBANK'
@@ -130,6 +146,42 @@ const protectEmergencyAuth = catchAsync(async (req, res, next) => {
 			message: 'Account is deactivated or suspended.',
 		})
 	}
+
+	// Role-specific accountStatus enforcement
+	if (userRole === 'MEDICAL_OFFICER') {
+		// Strict Medical Officer gate: missing lifecycle is NEVER treated as Active
+		if (!currentUser.accountStatus) {
+			return res.status(403).json({
+				status: 'fail',
+				message: 'Access denied: Medical Officer account status is missing. Administrative activation required.',
+			})
+		}
+		if (currentUser.accountStatus !== 'Active') {
+			return res.status(403).json({
+				status: 'fail',
+				message: `Access denied: Medical Officer account is ${currentUser.accountStatus.toLowerCase()}.`,
+			})
+		}
+	} else if (userRole === 'HOSPITAL_ADMIN') {
+		// Hospital Representative requires Active accountStatus
+		if (!currentUser.accountStatus || currentUser.accountStatus !== 'Active') {
+			const repStatus = currentUser.accountStatus || 'pending_activation'
+			return res.status(403).json({
+				status: 'fail',
+				message: `Hospital Representative account is ${repStatus.toLowerCase()}. Access denied until administrative activation.`,
+			})
+		}
+	} else if (userRole === 'USER') {
+		// Platform USER: reject explicitly suspended or deactivated accounts
+		// Legacy records with absent accountStatus remain authorized if status === true
+		if (currentUser.accountStatus && currentUser.accountStatus !== 'Active') {
+			return res.status(403).json({
+				status: 'fail',
+				message: `Account is ${currentUser.accountStatus.toLowerCase()}. Access denied.`,
+			})
+		}
+	}
+	// ADMIN and BLOODBANK use boolean status (enforced above); accountStatus does not apply to their schemas.
 
 	if (currentUser.changedPasswordAfter(decoded.iat, decoded.tokenVersion)) {
 		return res.status(401).json({

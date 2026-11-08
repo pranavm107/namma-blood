@@ -1,0 +1,3 @@
+$kind: collection
+description: Public login endpoints for all four platform actors (User, Admin, Blood Bank, Staff) with automated JWT token extraction to Postman environment.
+order: 1000

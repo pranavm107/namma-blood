@@ -1,0 +1,20 @@
+$kind: http-request
+name: 4.4 GET Request Matches - Malformed Request Identifier [400 Bad Request]
+description: "Negative Test: An identifier that is neither a 24-character hex ObjectId nor an EMG- requestNumber fails validation with HTTP 400."
+url: "{{baseUrl}}/api/emergency/requests/not-a-valid-id/matches"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Fails closed with INVALID_REQUEST_IDENTIFIER error code", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.code).to.eql("INVALID_REQUEST_IDENTIFIER");
+          pm.expect(jsonData.message).to.include("emergency request identifier is invalid");
+      });
+    language: text/javascript
+order: 4000

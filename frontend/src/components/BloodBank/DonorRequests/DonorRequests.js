@@ -43,10 +43,13 @@ const DonorRequests = () => {
 	const { donateRequests, isLoading } = useSelector(
 		(state) => state?.donaterequests
 	)
+	const { role } = useSelector((state) => state?.login || {})
 
 	useEffect(() => {
-		dispatch(getDonateBloodbankDataQuery('All'))
-	}, [dispatch])
+		if (role === 'BLOODBANK') {
+			dispatch(getDonateBloodbankDataQuery('All'))
+		}
+	}, [dispatch, role])
 
 	const handleClickPendingOpen = (id, status) => {
 		setPendingOpen(true)

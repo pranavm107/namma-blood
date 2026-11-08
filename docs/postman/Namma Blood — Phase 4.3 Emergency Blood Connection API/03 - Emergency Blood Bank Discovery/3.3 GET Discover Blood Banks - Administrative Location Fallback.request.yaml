@@ -1,0 +1,24 @@
+$kind: http-request
+name: 3.3 GET Discover Blood Banks - Administrative Location Fallback [200 OK]
+description: Discovers registered blood banks by administrative city and state filters.
+url: "{{baseUrl}}/api/emergency/discover/bloodbanks?city=Bengaluru&state=Karnataka&page=1&limit=5"
+method: GET
+queryParams:
+  city: Bengaluru
+  state: Karnataka
+  page: "1"
+  limit: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Uses administrative city/state parameters", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(false);
+          pm.expect(jsonData.searchCriteria.city).to.eql("Bengaluru");
+      });
+    language: text/javascript
+order: 3000

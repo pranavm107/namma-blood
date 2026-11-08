@@ -1,0 +1,22 @@
+$kind: http-request
+name: 2.4 GET Discover Donors - Incomplete Coordinates [400 Bad Request]
+description: "Negative Test: Supplying `latitude` without `longitude` must return HTTP 400."
+url: "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716"
+method: GET
+queryParams:
+  bloodGroup: B_Positive
+  latitude: "12.9716"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Requires both latitude and longitude together", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Both latitude and longitude must be provided");
+      });
+    language: text/javascript
+order: 4000

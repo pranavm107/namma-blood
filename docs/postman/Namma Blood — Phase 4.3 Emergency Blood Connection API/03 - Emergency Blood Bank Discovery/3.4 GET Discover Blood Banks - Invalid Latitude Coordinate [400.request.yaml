@@ -1,0 +1,22 @@
+$kind: http-request
+name: 3.4 GET Discover Blood Banks - Invalid Latitude Coordinate [400 Bad Request]
+description: "Negative Test: Out of bounds latitude (> 90) fails with HTTP 400."
+url: "{{baseUrl}}/api/emergency/discover/bloodbanks?latitude=99.9&longitude=77.5946"
+method: GET
+queryParams:
+  latitude: "99.9"
+  longitude: "77.5946"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Latitude must be between -90 and +90", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Latitude must be between -90 and +90 degrees");
+      });
+    language: text/javascript
+order: 4000

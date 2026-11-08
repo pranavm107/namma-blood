@@ -1,0 +1,20 @@
+$kind: http-request
+name: 4.5 GET Request Matches - Missing Request or Unauthorized BOLA [404 Not Found]
+description: "Negative Test: Enforces anti-enumeration security. A non-existent request and an unauthorized user request return the exact same 404 REQUEST_NOT_FOUND response."
+url: "{{baseUrl}}/api/emergency/requests/507f1f77bcf86cd799439011/matches"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 404 Not Found", function () {
+          pm.response.to.have.status(404);
+      });
+
+      pm.test("Returns anti-enumeration REQUEST_NOT_FOUND error", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.code).to.eql("REQUEST_NOT_FOUND");
+          pm.expect(jsonData.message).to.eql("Emergency blood request was not found.");
+      });
+    language: text/javascript
+order: 5000

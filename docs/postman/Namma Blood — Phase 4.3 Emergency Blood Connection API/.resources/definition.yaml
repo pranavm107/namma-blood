@@ -1,0 +1,21 @@
+$kind: collection
+description: |-
+  Comprehensive manual test collection for Phase 4.3 of Namma Blood.
+
+  Covers:
+  1. Authentication (`/api/user/login`, `/api/admin/login`, `/api/bloodbank/login`, `/api/bloodbank/staff/login`)
+  2. Candidate Donor Discovery (`GET /api/emergency/discover/donors`)
+  3. Blood Bank Discovery with Traceable Inventory (`GET /api/emergency/discover/bloodbanks`)
+  4. Request-Centric Candidate Matching Engine (`GET /api/emergency/requests/:id/matches`)
+
+  All protected endpoints inherit Bearer Token authorization from the collection, powered by the `{{token}}` variable which is automatically populated upon any successful login.
+variables:
+  baseUrl: http://localhost:5050
+  token: ""
+  requestId: ""
+auth:
+  - id: 209885e2-fd5e-47e9-9351-a83351cc025b
+    type: bearer
+    name: bearer auth
+    credentials:
+      token: "{{token}}"

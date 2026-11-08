@@ -18,6 +18,10 @@ import { useNavigate } from 'react-router-dom'
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism'
 import BloodtypeIcon from '@mui/icons-material/Bloodtype'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import ExploreIcon from '@mui/icons-material/Explore'
+import HubIcon from '@mui/icons-material/Hub'
+import ShieldIcon from '@mui/icons-material/Shield'
 import { getUserDonateStates } from '../../store/donateStatesSlice'
 import { getUserRequestsStates } from '../../store/receiveStatesSlice'
 
@@ -120,6 +124,112 @@ const UserHome = () => {
 					>
 						Find Blood Stock
 					</Button>
+				</Stack>
+			</Paper>
+
+			{/* Emergency Blood Response & Matching Section */}
+			<Paper
+				elevation={0}
+				sx={{
+					p: { xs: 2.5, md: 3 },
+					mb: 4,
+					borderRadius: 3,
+					background: 'linear-gradient(135deg, #fff5f5 0%, #ffffff 100%)',
+					border: '1.5px solid #ef5350',
+					boxShadow: '0 4px 20px rgba(211, 47, 47, 0.08)',
+				}}
+			>
+				<Stack direction={{ xs: 'column', md: 'row' }} justifyContent='space-between' alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
+					<Box>
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+							<Chip
+								icon={<WarningAmberIcon sx={{ color: '#d32f2f !important' }} />}
+								label='CRITICAL EMERGENCY RESPONSE'
+								size='small'
+								sx={{
+									backgroundColor: '#ffebee',
+									color: '#c62828',
+									fontWeight: 800,
+									fontSize: '0.72rem',
+									letterSpacing: '0.05em',
+									border: '1px solid #ffcdd2',
+								}}
+							/>
+							<Chip
+								icon={<ShieldIcon sx={{ color: '#2e7d32 !important' }} />}
+								label='Tier 3 Discovery Active'
+								size='small'
+								sx={{
+									backgroundColor: '#e8f5e9',
+									color: '#2e7d32',
+									fontWeight: 700,
+									fontSize: '0.72rem',
+								}}
+							/>
+						</Box>
+						<Typography variant='h5' sx={{ fontWeight: 800, color: '#991b1b', mb: 0.5 }}>
+							Emergency Blood Connection & Matching
+						</Typography>
+						<Typography variant='body2' sx={{ color: '#475569', maxWidth: 720 }}>
+							Initiate urgent emergency blood tickets, run real-time dual-stream donor discovery, and query verified blood bank facility stocks. Matching results require clinical confirmation prior to dispatch.
+						</Typography>
+					</Box>
+					<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: 0 }}>
+						<Button
+							variant='contained'
+							startIcon={<WarningAmberIcon />}
+							onClick={() => navigate('/user/emergency-request')}
+							sx={{
+								backgroundColor: '#d32f2f',
+								color: '#ffffff',
+								fontWeight: 700,
+								textTransform: 'none',
+								px: 2.5,
+								py: 1,
+								borderRadius: 2,
+								boxShadow: '0 4px 14px rgba(211, 47, 47, 0.35)',
+								'&:hover': { backgroundColor: '#b71c1c' },
+							}}
+						>
+							Emergency Request
+						</Button>
+						<Button
+							variant='outlined'
+							startIcon={<ExploreIcon />}
+							onClick={() => navigate('/user/emergency-discovery')}
+							sx={{
+								borderColor: '#d32f2f',
+								color: '#d32f2f',
+								fontWeight: 700,
+								textTransform: 'none',
+								px: 2.5,
+								py: 1,
+								borderRadius: 2,
+								'&:hover': {
+									borderColor: '#b71c1c',
+									backgroundColor: '#ffebee',
+								},
+							}}
+						>
+							Emergency Discovery
+						</Button>
+						<Button
+							variant='text'
+							startIcon={<HubIcon />}
+							onClick={() => navigate('/user/emergency-matches')}
+							sx={{
+								color: '#7f1d1d',
+								fontWeight: 700,
+								textTransform: 'none',
+								px: 2,
+								py: 1,
+								borderRadius: 2,
+								'&:hover': { backgroundColor: 'rgba(211, 47, 47, 0.08)' },
+							}}
+						>
+							Ticket Matches
+						</Button>
+					</Stack>
 				</Stack>
 			</Paper>
 

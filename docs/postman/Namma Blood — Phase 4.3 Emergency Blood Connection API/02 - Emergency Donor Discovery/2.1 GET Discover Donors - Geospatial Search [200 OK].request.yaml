@@ -1,0 +1,63 @@
+$kind: http-request
+description: Discovers nearby eligible donors within 15 km of Victoria Hospital, Bengaluru using geospatial coordinates and presumptive compatibility matching.
+url: "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&componentType=Packed_Red_Blood_Cells&latitude=12.9716&longitude=77.5946&radiusKm=15&page=1&limit=10"
+method: GET
+queryParams:
+  - key: bloodGroup
+    value: B_Positive
+    description: Mandatory recipient blood group
+  - key: componentType
+    value: Packed_Red_Blood_Cells
+    description: Requested component type (defaults to Packed_Red_Blood_Cells)
+  - key: latitude
+    value: "12.9716"
+    description: Hospital/search latitude [-90 to +90]
+  - key: longitude
+    value: "77.5946"
+    description: Hospital/search longitude [-180 to +180]
+  - key: radiusKm
+    value: "15"
+    description: Geospatial radius [1 to 50 km]
+  - key: page
+    value: "1"
+    description: Page number (>= 1)
+  - key: limit
+    value: "10"
+    description: Page size [1 to 50]
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response structure adheres to Phase 4.3 specification", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("searchCriteria");
+          pm.expect(jsonData).to.have.property("pagination");
+          pm.expect(jsonData).to.have.property("data");
+          pm.expect(jsonData).to.have.property("governance");
+          
+          pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(true);
+          pm.expect(jsonData.searchCriteria.recipientBloodGroup).to.eql("B_Positive");
+          pm.expect(jsonData.governance.cannotAuthorizeDonation).to.eql(true);
+          pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);
+          pm.expect(jsonData.governance.requiresLaboratoryCrossmatch).to.eql(true);
+      });
+
+      pm.test("Privacy Shield enforces candidate sanitization", function () {
+          var jsonData = pm.response.json();
+          if (jsonData.data && jsonData.data.length > 0) {
+              var donor = jsonData.data[0];
+              pm.expect(donor).to.not.have.property("_id");
+              pm.expect(donor).to.not.have.property("userId");
+              pm.expect(donor).to.not.have.property("phoneNo");
+              pm.expect(donor).to.not.have.property("address");
+              pm.expect(donor).to.not.have.property("location");
+              pm.expect(donor).to.have.property("approxDistanceKm");
+              pm.expect(donor).to.have.property("matchQuality");
+              pm.expect(donor).to.have.property("clinicalNotice");
+          }
+      });
+    language: text/javascript
+order: 1000

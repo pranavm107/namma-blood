@@ -11,6 +11,9 @@ import bloodStockSlice from './stockSlice'
 import contactUsSlice from './contactUsSlice'
 import bloodUnitSlice from './bloodUnitSlice'
 import reconciliationSlice from './reconciliationSlice'
+import emergencySlice from './emergencySlice'
+import medicalOfficerSlice from './medicalOfficerSlice'
+import adminHospitalSlice from './adminHospitalSlice'
 
 const store = configureStore({
 	reducer: {
@@ -26,6 +29,9 @@ const store = configureStore({
 		contactus: contactUsSlice,
 		bloodUnit: bloodUnitSlice,
 		reconciliation: reconciliationSlice,
+		emergency: emergencySlice,
+		medicalOfficer: medicalOfficerSlice,
+		adminHospital: adminHospitalSlice,
 	},
 })
 

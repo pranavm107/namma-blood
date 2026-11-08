@@ -39,6 +39,9 @@ export const getBloodbankReceiveStates = createAsyncThunk(
 		try {
 			const userData = JSON.parse(localStorage.getItem('loginData'))
 			const token = userData?.token
+			if (!token || userData?.role !== 'BLOODBANK') {
+				return null
+			}
 
 			const response = await axios.get(
 				`${BASE_URL}/receiverequests/getbloodbankstates`,

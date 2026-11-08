@@ -1,0 +1,25 @@
+$kind: http-request
+name: 2.6 GET Discover Donors - Unauthenticated Access [401 Unauthorized]
+description: "Negative Test: Verify unauthenticated requests without Bearer Token are blocked with HTTP 401."
+url: "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716&longitude=77.5946"
+method: GET
+queryParams:
+  bloodGroup: B_Positive
+  latitude: "12.9716"
+  longitude: "77.5946"
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 401 Unauthorized", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Returns authentication required message", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Authentication required");
+      });
+    language: text/javascript
+order: 6000

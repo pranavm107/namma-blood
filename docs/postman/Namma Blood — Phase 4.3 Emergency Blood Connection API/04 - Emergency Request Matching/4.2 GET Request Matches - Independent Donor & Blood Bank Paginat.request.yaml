@@ -1,0 +1,26 @@
+$kind: http-request
+name: 4.2 GET Request Matches - Independent Donor & Blood Bank Pagination [200 OK]
+description: Verifies independent pagination control where donor stream is on page 2 (limit 5) while blood bank stream is on page 1 (limit 3).
+url: "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?donorPage=2&donorLimit=5&bankPage=1&bankLimit=3"
+method: GET
+queryParams:
+  donorPage: "2"
+  donorLimit: "5"
+  bankPage: "1"
+  bankLimit: "3"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Enforces independent donor vs blood bank pagination parameters", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.donors.pagination.page).to.eql(2);
+          pm.expect(jsonData.donors.pagination.limit).to.eql(5);
+          pm.expect(jsonData.bloodBanks.pagination.page).to.eql(1);
+          pm.expect(jsonData.bloodBanks.pagination.limit).to.eql(3);
+      });
+    language: text/javascript
+order: 2000

@@ -13,6 +13,9 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import BiotechIcon from '@mui/icons-material/Biotech'
 import SecurityIcon from '@mui/icons-material/Security'
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import ExploreIcon from '@mui/icons-material/Explore'
+import HubIcon from '@mui/icons-material/Hub'
 import { useDispatch, useSelector } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import LogoutIcon from '@mui/icons-material/Logout'
@@ -31,7 +34,24 @@ const MainListItems = () => {
 		if (role === 'USER') navigate('/user')
 		else if (role === 'BLOODBANK') navigate('/bloodbank')
 		else if (role === 'ADMIN') navigate('/admin')
+		else if (role === 'MEDICAL_OFFICER') navigate('/medical-officer')
 		else navigate('/')
+	}
+
+	const medicalOfficerDashboardHandler = () => {
+		navigate('/medical-officer')
+	}
+
+	const medicalOfficerPendingHandler = () => {
+		navigate('/medical-officer/pending')
+	}
+
+	const medicalOfficerVerifiedHandler = () => {
+		navigate('/medical-officer/verified')
+	}
+
+	const medicalOfficerRejectedHandler = () => {
+		navigate('/medical-officer/rejected')
 	}
 
 	const adminHandler = () => {
@@ -56,6 +76,18 @@ const MainListItems = () => {
 
 	const lookingForBloodHandler = () => {
 		navigate('/user/lookingfor')
+	}
+
+	const emergencyRequestHandler = () => {
+		navigate('/user/emergency-request')
+	}
+
+	const emergencyDiscoveryHandler = () => {
+		navigate('/user/emergency-discovery')
+	}
+
+	const emergencyMatchesHandler = () => {
+		navigate('/user/emergency-matches')
 	}
 
 	const donorrequestsForBloodHandler = () => {
@@ -98,6 +130,14 @@ const MainListItems = () => {
 
 	const bulkImportHandler = () => {
 		navigate('/admin/bulk-import')
+	}
+
+	const adminHospitalsHandler = () => {
+		navigate('/admin/hospitals')
+	}
+
+	const adminMedicalOfficersHandler = () => {
+		navigate('/admin/medical-officers')
 	}
 
 	const logoutHandler = async () => {
@@ -207,6 +247,44 @@ const MainListItems = () => {
 							<BloodtypeIcon />
 						</ListItemIcon>
 						<ListItemText primary='Looking for blood' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={emergencyRequestHandler}
+						selected={url[2] === 'emergency-request'}
+						sx={{
+							borderRadius: 1,
+							mx: 0.5,
+							'&.Mui-selected': { backgroundColor: 'rgba(211, 47, 47, 0.08)' },
+							'&.Mui-selected:hover': { backgroundColor: 'rgba(211, 47, 47, 0.14)' },
+						}}
+					>
+						<ListItemIcon sx={{ color: '#d32f2f' }}>
+							<WarningAmberIcon />
+						</ListItemIcon>
+						<ListItemText
+							primary='Emergency Request'
+							primaryTypographyProps={{ sx: { fontWeight: 600, color: '#c62828' } }}
+						/>
+					</ListItemButton>
+					<ListItemButton
+						onClick={emergencyDiscoveryHandler}
+						selected={url[2] === 'emergency-discovery'}
+						sx={{ borderRadius: 1, mx: 0.5 }}
+					>
+						<ListItemIcon>
+							<ExploreIcon />
+						</ListItemIcon>
+						<ListItemText primary='Emergency Discovery' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={emergencyMatchesHandler}
+						selected={url[2] === 'emergency-matches' || url[2] === 'emergency-requests'}
+						sx={{ borderRadius: 1, mx: 0.5 }}
+					>
+						<ListItemIcon>
+							<HubIcon />
+						</ListItemIcon>
+						<ListItemText primary='Emergency Matching' />
 					</ListItemButton>
 					{/* <ListItemButton
 						onClick={contactusHandler}
@@ -336,7 +414,25 @@ const MainListItems = () => {
 						<ListItemIcon>
 							<BloodtypeIcon />
 						</ListItemIcon>
-						<ListItemText primary='Bloodbanks' />
+						<ListItemText primary='Blood Banks' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={adminHospitalsHandler}
+						selected={url[1] === 'admin' && url[2] === 'hospitals'}
+					>
+						<ListItemIcon>
+							<LocalHospitalIcon />
+						</ListItemIcon>
+						<ListItemText primary='Hospital Registry' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={adminMedicalOfficersHandler}
+						selected={url[1] === 'admin' && url[2] === 'medical-officers'}
+					>
+						<ListItemIcon>
+							<SecurityIcon />
+						</ListItemIcon>
+						<ListItemText primary='Medical Officer Management' />
 					</ListItemButton>
 					<ListItemButton
 						onClick={bulkImportHandler}
@@ -355,6 +451,53 @@ const MainListItems = () => {
 							<InfoIcon />
 						</ListItemIcon>
 						<ListItemText primary='About us' />
+					</ListItemButton>
+					<ListItemButton onClick={logoutHandler}>
+						<ListItemIcon>
+							<LogoutIcon />
+						</ListItemIcon>
+						<ListItemText primary='Logout' />
+					</ListItemButton>
+				</>
+			)}
+
+			{isLoggedin && role === 'MEDICAL_OFFICER' && (
+				<>
+					<ListItemButton
+						onClick={medicalOfficerDashboardHandler}
+						selected={url[1] === 'medical-officer' && (url.length === 2 || url[2] === '')}
+					>
+						<ListItemIcon>
+							<HomeIcon />
+						</ListItemIcon>
+						<ListItemText primary='MO Dashboard' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={medicalOfficerPendingHandler}
+						selected={url[1] === 'medical-officer' && url[2] === 'pending'}
+					>
+						<ListItemIcon>
+							<WarningAmberIcon />
+						</ListItemIcon>
+						<ListItemText primary='Pending Requests' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={medicalOfficerVerifiedHandler}
+						selected={url[1] === 'medical-officer' && url[2] === 'verified'}
+					>
+						<ListItemIcon>
+							<LocalHospitalIcon />
+						</ListItemIcon>
+						<ListItemText primary='Verified Requests' />
+					</ListItemButton>
+					<ListItemButton
+						onClick={medicalOfficerRejectedHandler}
+						selected={url[1] === 'medical-officer' && url[2] === 'rejected'}
+					>
+						<ListItemIcon>
+							<BloodtypeIcon />
+						</ListItemIcon>
+						<ListItemText primary='Rejected Requests' />
 					</ListItemButton>
 					<ListItemButton onClick={logoutHandler}>
 						<ListItemIcon>

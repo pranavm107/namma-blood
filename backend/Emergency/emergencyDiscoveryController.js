@@ -10,6 +10,7 @@ const {
 	discoverNearbyDonors,
 	discoverNearbyBloodbanks,
 } = require('./emergencyDiscoveryService')
+const { findEmergencyRequestMatches } = require('./emergencyMatchingService')
 const { VALID_BLOOD_GROUPS, VALID_COMPONENT_TYPES } = require('../BloodUnit/bloodUnitModel')
 
 /**
@@ -347,7 +348,197 @@ const getNearbyBloodbanks = catchAsync(async (req, res) => {
 	return res.status(200).json(discoveryResult)
 })
 
+/**
+ * Controller handler for GET /api/emergency/requests/:id/matches
+ * Sub-Milestone 4.3.3.4: Request-Centric Emergency Matching Engine
+ *
+ * Core Capabilities:
+ * 1. Resolves request by MongoDB ObjectId or formatted requestNumber.
+ * 2. Enforces strict BOLA/IDOR authorization using authenticated req.user / req.staff context.
+ * 3. Enforces anti-enumeration security: missing and unauthorized requests return identical 404 responses.
+ * 4. Validates request lifecycle and shortfall data integrity.
+ * 5. Integrates dual-stream discovery engine with 128-bit truncated HMAC references.
+ * 6. Guarantees zero database mutations (strictly read-only).
+ */
+const getRequestMatches = catchAsync(async (req, res) => {
+	// 1. Guard against NoSQL injection via malicious query keys or nested query operators
+	const query = req.query || {}
+	for (const key of Object.keys(query)) {
+		if (key.startsWith('$') || key.includes('.')) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Forbidden query operator or key. Query operators and nested keys are not permitted.',
+			})
+		}
+		const val = query[key]
+		if (typeof val === 'object' && val !== null) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Invalid query parameter: nested query objects are not permitted.',
+			})
+		}
+	}
+
+	// 2. Validate request identifier parameter (:id)
+	const requestId = req.params ? req.params.id : undefined
+	if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+		return res.status(400).json({
+			status: 'fail',
+			code: 'INVALID_REQUEST_IDENTIFIER',
+			message: 'The emergency request identifier is invalid.',
+		})
+	}
+
+	// 3. Validate optional search radius
+	let radiusKm = 15
+	if (req.query.radiusKm !== undefined || req.query.radius !== undefined) {
+		const rawRadius = req.query.radiusKm !== undefined ? req.query.radiusKm : req.query.radius
+		const parsedRadius = Number(rawRadius)
+		if (isNaN(parsedRadius) || parsedRadius < 1 || parsedRadius > 50) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Search radius must be a numeric value between 1 and 50 km.',
+			})
+		}
+		radiusKm = parsedRadius
+	}
+
+	// 4. Validate pagination parameters
+	const options = {
+		radiusKm,
+	}
+
+	if (req.query.donorLimit !== undefined) {
+		const parsed = Number(req.query.donorLimit)
+		if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Donor page limit must be an integer between 1 and 50.',
+			})
+		}
+		options.donorLimit = parsed
+	}
+
+	if (req.query.donorPage !== undefined) {
+		const parsed = Number(req.query.donorPage)
+		if (isNaN(parsed) || parsed < 1) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Donor page number must be a positive integer greater than or equal to 1.',
+			})
+		}
+		options.donorPage = parsed
+	}
+
+	if (req.query.bankLimit !== undefined) {
+		const parsed = Number(req.query.bankLimit)
+		if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Blood bank page limit must be an integer between 1 and 50.',
+			})
+		}
+		options.bankLimit = parsed
+	}
+
+	if (req.query.bankPage !== undefined) {
+		const parsed = Number(req.query.bankPage)
+		if (isNaN(parsed) || parsed < 1) {
+			return res.status(400).json({
+				status: 'fail',
+				message: 'Blood bank page number must be a positive integer greater than or equal to 1.',
+			})
+		}
+		options.bankPage = parsed
+	}
+
+	// 5. Build strict authContext from authenticated request (NEVER trust client query params)
+	const authContext = {
+		user: req.user,
+		userRole: req.userRole,
+		staff: req.staff,
+	}
+
+	// 6. Invoke matching engine with error boundary
+	try {
+		const matchingResult = await findEmergencyRequestMatches(requestId.trim(), authContext, options)
+
+		return res.status(200).json({
+			status: 'success',
+			data: matchingResult,
+			...matchingResult,
+		})
+	} catch (err) {
+		// Safe, non-leaking error responses
+		const statusCode = err.statusCode || (err.status === 'fail' ? 400 : 500)
+
+		// Indistinguishable 404 response (Anti-enumeration security)
+		// Internal audit fields (isAuthorizationDenial, internalCode) are NEVER leaked
+		if (statusCode === 404 || err.code === 'REQUEST_NOT_FOUND') {
+			return res.status(404).json({
+				status: 'fail',
+				code: 'REQUEST_NOT_FOUND',
+				message: 'Emergency blood request was not found.',
+			})
+		}
+
+		// Account deactivated / staff inactive / authentication required
+		if (statusCode === 401) {
+			return res.status(401).json({
+				status: 'fail',
+				code: err.code || 'AUTHENTICATION_REQUIRED',
+				message: err.message,
+			})
+		}
+
+		// Invalid request identifier (400)
+		if (err.code === 'INVALID_REQUEST_IDENTIFIER') {
+			return res.status(400).json({
+				status: 'fail',
+				code: 'INVALID_REQUEST_IDENTIFIER',
+				message: 'The emergency request identifier is invalid.',
+			})
+		}
+
+		// Operational validation / lifecycle errors (400)
+		if (statusCode >= 400 && statusCode < 500) {
+			return res.status(statusCode).json({
+				status: 'fail',
+				code: err.code || 'VALIDATION_ERROR',
+				message: err.message,
+			})
+		}
+
+		// Data integrity violations (500)
+		if (err.code === 'DATA_INTEGRITY_VIOLATION') {
+			return res.status(500).json({
+				status: 'error',
+				code: 'DATA_INTEGRITY_VIOLATION',
+				message: err.message,
+			})
+		}
+
+		// HMAC configuration failures (500)
+		if (err.code === 'HMAC_CONFIG_INVALID') {
+			return res.status(500).json({
+				status: 'error',
+				code: 'HMAC_CONFIG_INVALID',
+				message: 'Cryptographic configuration failure: HMAC configuration is invalid.',
+			})
+		}
+
+		// Internal server error: Never leak stack traces, database credentials, or internal details
+		console.error('Matching Controller Error:', err.message)
+		return res.status(500).json({
+			status: 'error',
+			code: 'INTERNAL_SERVER_ERROR',
+			message: 'An internal error occurred while processing emergency request matches.',
+		})
+	}
+})
+
 module.exports = {
 	getNearbyDonors,
 	getNearbyBloodbanks,
+	getRequestMatches,
 }

@@ -20,18 +20,30 @@ export const loginUser = createAsyncThunk(
 	'login/loginUser',
 	async (user, { rejectWithValue }) => {
 		try {
-			const response = await axios.post(BASE_URL + '/user/login', user)
+			const response = await axios.post(BASE_URL + '/user/login', {
+				email: user?.email,
+				password: user?.password,
+			})
+			const token = response?.data?.token
+
+			// Determine authenticated role exclusively from trusted backend authentication data.
+			// Never assign privileged roles based on URL, form input, or client-controlled values.
+			const backendRole = response?.data?.role || response?.data?.user?.role
+			const determinedRole = backendRole === 'MEDICAL_OFFICER' ? 'MEDICAL_OFFICER' : 'USER'
 
 			const LoggedInUserData = {
 				isLoggedin: true,
-				token: response?.data.token,
+				token: token,
 				isLoading: false,
-				role: 'USER',
+				role: determinedRole,
 				error: null,
 			}
 			localStorage.setItem('loginData', JSON.stringify(LoggedInUserData))
 
-			return response?.data
+			return {
+				...response?.data,
+				role: determinedRole,
+			}
 		} catch (error) {
 			return rejectWithValue(error?.response?.data)
 		}
@@ -194,7 +206,7 @@ const loginSlice = createSlice({
 					isLoggedin: true,
 					token: action?.payload?.token,
 					user: action?.payload?.user,
-					role: 'USER',
+					role: action?.payload?.role || 'USER',
 					error: null,
 				}
 			})

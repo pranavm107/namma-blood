@@ -1,0 +1,68 @@
+$kind: http-request
+name: 4.1 GET Request Matches - Dual Stream Candidate Discovery [200 OK]
+description: Executes request matching on a verified active emergency request using its MongoDB ObjectId `{{requestId}}`.
+url: "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?radiusKm=15&donorPage=1&donorLimit=10&bankPage=1&bankLimit=10"
+method: GET
+queryParams:
+  - key: radiusKm
+    value: "15"
+    description: Geospatial radius [1 to 50 km]
+  - key: donorPage
+    value: "1"
+    description: Donor candidate stream page
+  - key: donorLimit
+    value: "10"
+    description: Donor candidate stream page size
+  - key: bankPage
+    value: "1"
+    description: Blood bank candidate stream page
+  - key: bankLimit
+    value: "10"
+    description: Blood bank candidate stream page size
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Matching payload structure adheres to Milestone 4.3.3.4 spec", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("success");
+          pm.expect(jsonData).to.have.property("emergencyRequest");
+          pm.expect(jsonData).to.have.property("matchingSummary");
+          pm.expect(jsonData).to.have.property("bloodBanks");
+          pm.expect(jsonData).to.have.property("donors");
+          pm.expect(jsonData).to.have.property("governance");
+          
+          pm.expect(jsonData.governance.cannotAuthorizeDonation).to.eql(true);
+          pm.expect(jsonData.governance.cannotAuthorizeReservation).to.eql(true);
+          pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);
+      });
+
+      pm.test("Dual-stream pagination containers are independent", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.donors).to.have.property("pagination");
+          pm.expect(jsonData.donors).to.have.property("data");
+          pm.expect(jsonData.bloodBanks).to.have.property("pagination");
+          pm.expect(jsonData.bloodBanks).to.have.property("data");
+      });
+
+      pm.test("HMAC candidate references adhere to DNR- and BB- format", function () {
+          var jsonData = pm.response.json();
+          if (jsonData.donors.data && jsonData.donors.data.length > 0) {
+              var donorCandidate = jsonData.donors.data[0];
+              pm.expect(donorCandidate).to.have.property("candidateRef");
+              pm.expect(donorCandidate.candidateRef).to.match(/^DNR-[0-9A-F]{32}$/);
+              pm.expect(donorCandidate).to.not.have.property("_id");
+              pm.expect(donorCandidate).to.not.have.property("userId");
+          }
+          if (jsonData.bloodBanks.data && jsonData.bloodBanks.data.length > 0) {
+              var bankCandidate = jsonData.bloodBanks.data[0];
+              pm.expect(bankCandidate).to.have.property("facilityRef");
+              pm.expect(bankCandidate.facilityRef).to.match(/^BB-[0-9A-F]{12}$/);
+              pm.expect(bankCandidate).to.not.have.property("_id");
+          }
+      });
+    language: text/javascript
+order: 1000

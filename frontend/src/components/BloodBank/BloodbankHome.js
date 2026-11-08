@@ -27,11 +27,14 @@ const BloodbankHome = () => {
 	const navigate = useNavigate()
 	const donatestates = useSelector((state) => state?.donatestates)
 	const receivestates = useSelector((state) => state?.receivestates)
+	const { role } = useSelector((state) => state?.login || {})
 
 	useEffect(() => {
-		dispatch(getBloodbankDonateStates())
-		dispatch(getBloodbankReceiveStates())
-	}, [dispatch])
+		if (role === 'BLOODBANK') {
+			dispatch(getBloodbankDonateStates())
+			dispatch(getBloodbankReceiveStates())
+		}
+	}, [dispatch, role])
 
 	const renderStatBox = (title, count, color, bg) => (
 		<Box

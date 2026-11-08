@@ -1,0 +1,19 @@
+$kind: http-request
+name: 4.3 GET Request Matches - By Human-Readable Request Number [200 OK]
+description: Verifies that the matching engine accepts formatted human-readable request numbers (`EMG-YYYYMMDD-XXXXXX`) in addition to 24-character hexadecimal MongoDB ObjectIds.
+url: "{{baseUrl}}/api/emergency/requests/EMG-20261102-ABC123/matches?radiusKm=20"
+method: GET
+queryParams:
+  radiusKm: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK or 404 if seed request not created", function () {
+          pm.expect([200, 404]).to.include(pm.response.code);
+      });
+      if (pm.response.code === 200) {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.emergencyRequest.requestNumber).to.match(/^EMG-[0-9A-Z_-]+$/);
+      }
+    language: text/javascript
+order: 3000

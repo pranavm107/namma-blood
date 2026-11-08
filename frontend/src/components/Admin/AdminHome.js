@@ -234,6 +234,200 @@ const AdminHome = () => {
 					</Card>
 				</Grid>
 
+				{/* Section: Hospital Registry & Medical Officer Network */}
+				<Grid item xs={12} sx={{ mt: 2 }}>
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+						<LocalHospitalIcon sx={{ color: '#16a34a' }} />
+						<Typography variant='h6' sx={{ fontWeight: 800, color: '#1e293b' }}>
+							Hospital Registry & Medical Officer Network (Phase 4.3.5)
+						</Typography>
+					</Box>
+					<Typography variant='body2' sx={{ color: '#64748b', mb: 1 }}>
+						Manage accredited hospital facilities, institutional verification status, and Medical Officer associations.
+					</Typography>
+				</Grid>
+
+				<Grid item xs={12} md={4}>
+					<Card
+						elevation={0}
+						sx={{
+							p: 2,
+							borderRadius: 3,
+							border: '1px solid #bbf7d0',
+							boxShadow: '0 4px 16px rgba(22, 163, 74, 0.05)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent>
+							<Box
+								sx={{
+									width: 48,
+									height: 48,
+									borderRadius: 2,
+									backgroundColor: '#f0fdf4',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									mb: 2,
+									color: '#16a34a',
+								}}
+							>
+								<LocalHospitalIcon />
+							</Box>
+							<Typography variant='h6' sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+								Hospital Registry
+							</Typography>
+							<Typography variant='body2' sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
+								Browse registered hospitals, filter by verification status and city, inspect credentials, and manage active status.
+							</Typography>
+						</CardContent>
+						<Box sx={{ p: 2, pt: 0 }}>
+							<Button
+								variant='contained'
+								fullWidth
+								onClick={() => navigate('/admin/hospitals')}
+								sx={{
+									backgroundColor: '#16a34a',
+									fontWeight: 700,
+									textTransform: 'none',
+									py: 1.2,
+									borderRadius: 2,
+									boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)',
+									'&:hover': {
+										backgroundColor: '#15803d',
+									},
+								}}
+							>
+								View Hospital Directory
+							</Button>
+						</Box>
+					</Card>
+				</Grid>
+
+				<Grid item xs={12} md={4}>
+					<Card
+						elevation={0}
+						sx={{
+							p: 2,
+							borderRadius: 3,
+							border: '1px solid #bbf7d0',
+							boxShadow: '0 4px 16px rgba(22, 163, 74, 0.05)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent>
+							<Box
+								sx={{
+									width: 48,
+									height: 48,
+									borderRadius: 2,
+									backgroundColor: '#f0fdf4',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									mb: 2,
+									color: '#16a34a',
+								}}
+							>
+								<AddCircleOutlineIcon />
+							</Box>
+							<Typography variant='h6' sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+								Register Hospital
+							</Typography>
+							<Typography variant='body2' sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
+								Onboard a new healthcare facility with classification, postal address, contact channels, and coordinates.
+							</Typography>
+						</CardContent>
+						<Box sx={{ p: 2, pt: 0 }}>
+							<Button
+								variant='outlined'
+								fullWidth
+								onClick={() => navigate('/admin/hospitals/register')}
+								sx={{
+									borderColor: '#16a34a',
+									color: '#16a34a',
+									fontWeight: 700,
+									textTransform: 'none',
+									py: 1.2,
+									borderRadius: 2,
+									'&:hover': {
+										borderColor: '#15803d',
+										backgroundColor: '#f0fdf4',
+									},
+								}}
+							>
+								Register Facility
+							</Button>
+						</Box>
+					</Card>
+				</Grid>
+
+				<Grid item xs={12} md={4}>
+					<Card
+						elevation={0}
+						sx={{
+							p: 2,
+							borderRadius: 3,
+							border: '1px solid #bbf7d0',
+							boxShadow: '0 4px 16px rgba(22, 163, 74, 0.05)',
+							height: '100%',
+							display: 'flex',
+							flexDirection: 'column',
+							justifyContent: 'space-between',
+						}}
+					>
+						<CardContent>
+							<Box
+								sx={{
+									width: 48,
+									height: 48,
+									borderRadius: 2,
+									backgroundColor: '#e0f2fe',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									mb: 2,
+									color: '#0284c7',
+								}}
+							>
+								<SecurityIcon />
+							</Box>
+							<Typography variant='h6' sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+								Medical Officer Management
+							</Typography>
+							<Typography variant='body2' sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
+								Associate accredited doctors with hospital facilities, grant explicit verification permissions, and manage status.
+							</Typography>
+						</CardContent>
+						<Box sx={{ p: 2, pt: 0 }}>
+							<Button
+								variant='contained'
+								fullWidth
+								onClick={() => navigate('/admin/medical-officers')}
+								sx={{
+									backgroundColor: '#1e293b',
+									fontWeight: 700,
+									textTransform: 'none',
+									py: 1.2,
+									borderRadius: 2,
+									boxShadow: '0 4px 12px rgba(30, 41, 59, 0.25)',
+									'&:hover': {
+										backgroundColor: '#0f172a',
+									},
+								}}
+							>
+								Manage Associations
+							</Button>
+						</Box>
+					</Card>
+				</Grid>
+
 				<Grid item xs={12}>
 					<Paper
 						elevation={0}

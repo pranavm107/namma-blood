@@ -1,0 +1,3 @@
+$kind: collection
+description: Endpoints for discovering nearby emergency blood donors based on presumptive immunohematology rules (`GET /api/emergency/discover/donors`).
+order: 2000

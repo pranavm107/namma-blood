@@ -1,0 +1,34 @@
+$kind: http-request
+description: Authenticates a registered regular user (donor/recipient) and automatically extracts the returned `token` into the `{{token}}` environment variable.
+url: "{{baseUrl}}/api/user/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "priya.rajan@example.com",
+      "password": "ghz%BM^@5hvQT*H"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has success message and JWT token", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message", "Login Successfully.");
+          pm.expect(jsonData).to.have.property("token");
+          pm.expect(jsonData.token).to.be.a("string");
+          
+          // Automatically save token to environment variable
+          pm.environment.set("token", jsonData.token);
+          console.log("User token saved to environment.");
+      });
+    language: text/javascript
+order: 1000

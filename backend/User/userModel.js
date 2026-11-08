@@ -17,16 +17,22 @@ const schema = new mongoose.Schema(
 		gender: {
 			type: String,
 			enum: ['Male', 'Female'],
-			required: [true, 'Gender is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 			trim: true,
 		},
 		dob: {
 			type: Date,
-			required: [true, 'Date of birth is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 		},
 		age: {
 			type: Number,
-			required: [true, 'Age is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 			min: 18,
 			max: 65,
 		},
@@ -46,22 +52,30 @@ const schema = new mongoose.Schema(
 		},
 		state: {
 			type: String,
-			required: [true, 'State is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 			trim: true,
 		},
 		city: {
 			type: String,
-			required: [true, 'City is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 			trim: true,
 		},
 		address: {
 			type: String,
-			required: [true, 'Address is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 			trim: true,
 		},
 		pinCode: {
 			type: Number,
-			required: [true, 'PIN Code is required'],
+			required: function () {
+				return this.role === 'USER'
+			},
 		},
 		password: {
 			type: String,
@@ -75,6 +89,125 @@ const schema = new mongoose.Schema(
 			type: Boolean,
 			default: true,
 		},
+		role: {
+			type: String,
+			enum: ['USER', 'MEDICAL_OFFICER', 'HOSPITAL_ADMIN'],
+			default: 'USER',
+			index: true,
+		},
+		// Decoupled Account Lifecycle
+		accountStatus: {
+			type: String,
+			enum: ['Pending_Activation', 'Active', 'Suspended', 'Deactivated'],
+			default: function () {
+				if (this.isNew === false) return undefined
+				return this.role === 'USER' ? 'Active' : 'Pending_Activation'
+			},
+			index: true,
+		},
+		// Decoupled Professional Medical Credential Lifecycle
+		credentialStatus: {
+			type: String,
+			enum: [
+				'Unsubmitted',
+				'Pending_Verification',
+				'Under_Review',
+				'Verified',
+				'Rejected',
+				'Suspended',
+			],
+			default: function () {
+				if (this.isNew === false) return undefined
+				return this.role === 'MEDICAL_OFFICER' ? 'Unsubmitted' : 'Verified'
+			},
+			index: true,
+		},
+		credentialVerifiedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'admin',
+			default: null,
+		},
+		credentialVerifiedAt: {
+			type: Date,
+			default: null,
+		},
+		credentialRejectionReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		// Hospital Representative Fields
+		hospitalId: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'hospital',
+			default: null,
+			index: true,
+		},
+		representativeStatus: {
+			type: String,
+			enum: ['Pending', 'Active', 'Suspended', 'Revoked'],
+			default: 'Pending',
+			index: true,
+		},
+		medicalRegistrationNumber: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		medicalCouncil: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		registrationState: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		qualification: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		specialization: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		supportingEvidence: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		// Preserved for backward compatibility
+		verificationStatus: {
+			type: String,
+			enum: ['Pending', 'Verified', 'Rejected', 'Suspended'],
+			default: function () {
+				if (this.isNew === false) return undefined
+				return this.role === 'MEDICAL_OFFICER' ? 'Pending' : 'Verified'
+			},
+			index: true,
+		},
+		rejectionReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		verifiedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'admin',
+			default: null,
+		},
+		verifiedAt: {
+			type: Date,
+			default: null,
+		},
+		nominatedByHospital: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'hospital',
+			default: null,
+		},
 		passwordChangedAt: Date,
 		passwordResetToken: String,
 		passwordResetExpires: Date,
@@ -84,6 +217,19 @@ const schema = new mongoose.Schema(
 		},
 	},
 	{ timestamps: true }
+)
+
+// Unique partial index: strictly one Medical Officer per non-empty medicalRegistrationNumber
+schema.index(
+	{ medicalRegistrationNumber: 1 },
+	{
+		unique: true,
+		partialFilterExpression: {
+			role: 'MEDICAL_OFFICER',
+			medicalRegistrationNumber: { $type: 'string', $gt: '' },
+		},
+		name: 'uniq_medical_registration_number_per_doctor',
+	}
 )
 
 schema.pre('save', async function (next) {

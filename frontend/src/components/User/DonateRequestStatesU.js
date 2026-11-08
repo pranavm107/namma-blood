@@ -134,11 +134,11 @@ const DonateRequestStatesU = () => {
 
 	return (
 		<>
-			<Grid container spacing={2} columns={12}>
-				<Grid item xs={9}>
-					<h1 style={{ color: '#ff0000' }}>Donate request states</h1>
+			<Grid container spacing={2} columns={12} sx={{ mb: 2, alignItems: 'center' }}>
+				<Grid item xs={12} sm={8} md={9}>
+					<h1 style={{ color: '#ff0000', margin: 0 }}>Donate request states</h1>
 				</Grid>
-				<Grid item xs={3}>
+				<Grid item xs={12} sm={4} md={3}>
 					<RequestStates
 						title='Request Stages'
 						stageData={onStageChangeHandler}
@@ -152,9 +152,12 @@ const DonateRequestStatesU = () => {
 					sx={{
 						border: 2,
 						borderColor: '#e69e9e',
+						borderRadius: 2,
+						overflow: 'hidden',
+						maxWidth: '100%',
 					}}
 				>
-					<TableContainer>
+					<TableContainer sx={{ overflowX: 'auto', maxWidth: '100%' }}>
 						<Table
 							sx={{ minWidth: 700 }}
 							aria-label='customized table'

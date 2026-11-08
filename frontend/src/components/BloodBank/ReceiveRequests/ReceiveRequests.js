@@ -45,10 +45,13 @@ const ReceiveRequests = () => {
 	const { receiveRequests, isLoading } = useSelector(
 		(state) => state?.receiverequests
 	)
+	const { role } = useSelector((state) => state?.login || {})
 
 	useEffect(() => {
-		dispatch(getReceiveBloodbankDataQuery('All'))
-	}, [dispatch])
+		if (role === 'BLOODBANK') {
+			dispatch(getReceiveBloodbankDataQuery('All'))
+		}
+	}, [dispatch, role])
 
 	const handleClickAcceptedOpen = (id, status, unit, bloodType) => {
 		setAcceptedOpen(true)

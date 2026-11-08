@@ -63,19 +63,20 @@ export const getDonateBloodbankDataQuery = createAsyncThunk(
 		try {
 			const userData = JSON.parse(localStorage.getItem('loginData'))
 			const token = userData?.token
+			if (!token || userData?.role !== 'BLOODBANK') {
+				return []
+			}
 
-			const query = stage !== 'All' && `status=${stage}`
+			const queryStr = stage && stage !== 'All' ? `status=${stage}` : ''
+			const url = queryStr
+				? `${BASE_URL}/donaterequests/getbloodbankdataquery?${queryStr}`
+				: `${BASE_URL}/donaterequests/getbloodbankdataquery`
 
-			const response = await axios.get(
-				`${BASE_URL}/donaterequests/getbloodbankdataquery?${
-					query && query
-				}`,
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				}
-			)
+			const response = await axios.get(url, {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
 			return response?.data
 		} catch (error) {
 			return rejectWithValue(error?.response?.data)

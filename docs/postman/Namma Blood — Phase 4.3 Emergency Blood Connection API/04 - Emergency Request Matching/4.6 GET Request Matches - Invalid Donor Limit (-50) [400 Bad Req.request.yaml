@@ -1,0 +1,21 @@
+$kind: http-request
+name: 4.6 GET Request Matches - Invalid Donor Limit (>50) [400 Bad Request]
+description: "Negative Test: Page limit exceeding the allowed ceiling of 50 returns HTTP 400."
+url: "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?donorLimit=100"
+method: GET
+queryParams:
+  donorLimit: "100"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Rejects pagination limit > 50", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Donor page limit must be an integer between 1 and 50");
+      });
+    language: text/javascript
+order: 6000

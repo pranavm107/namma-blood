@@ -1,0 +1,33 @@
+$kind: http-request
+description: Authenticates an institutional blood bank facility account and updates `{{token}}`.
+url: "{{baseUrl}}/api/bloodbank/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "adyar.lifeline@example.com",
+      "password": "Dp3u!g^pV2w5S%h"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has success message and JWT token", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message", "Login Successfully.");
+          pm.expect(jsonData).to.have.property("token");
+          pm.expect(jsonData.token).to.be.a("string");
+          
+          pm.environment.set("token", jsonData.token);
+          console.log("Blood Bank token saved to environment.");
+      });
+    language: text/javascript
+order: 3000

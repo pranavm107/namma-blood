@@ -1,0 +1,24 @@
+$kind: http-request
+name: 2.5 GET Discover Donors - Search Radius Exceeds 50km Bound [400 Bad Request]
+description: "Negative Test: Enforces strict radius ceiling of 50 km."
+url: "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716&longitude=77.5946&radiusKm=75"
+method: GET
+queryParams:
+  bloodGroup: B_Positive
+  latitude: "12.9716"
+  longitude: "77.5946"
+  radiusKm: "75"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 400 Bad Request", function () {
+          pm.response.to.have.status(400);
+      });
+
+      pm.test("Bounds radius between 1 and 50 km", function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("fail");
+          pm.expect(jsonData.message).to.include("Search radius must be a numeric value between 1 and 50 km");
+      });
+    language: text/javascript
+order: 5000

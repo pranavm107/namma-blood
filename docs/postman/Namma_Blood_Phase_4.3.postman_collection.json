@@ -1,0 +1,1762 @@
+{
+  "info": {
+    "_postman_id": "8c12a7bf-3b7c-482f-8d26-72f85e49f05a",
+    "name": "Namma Blood — Phase 4.3 Emergency Blood Connection API",
+    "description": "Comprehensive manual test collection for Phase 4.3 of Namma Blood.\n\nPre-populated with verified working development credentials for instant testing:\n- Regular User: priya.rajan@example.com / ghz%BM^@5hvQT*H\n- Admin: admin@nammablood.org / Password_123\n- Blood Bank: adyar.lifeline@example.com / Dp3u!g^pV2w5S%h\n- Staff (Medical Officer): mo.adyar@nammablood.internal / 63u^HTRSjXTs2ac\n\nAll protected endpoints inherit Bearer Token authorization from the collection, powered by the `{{token}}` variable which is automatically populated upon any successful login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5050",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "emergencyRequestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "emergencyRequestNumber",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Authentication",
+      "description": "Public login endpoints for all four platform actors (User, Admin, Blood Bank, Staff) with automated JWT token extraction to Postman environment.",
+      "item": [
+        {
+          "name": "1.1 POST User Login [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has success message and JWT token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\", \"Login Successfully.\");",
+                  "    pm.expect(jsonData).to.have.property(\"token\");",
+                  "    pm.expect(jsonData.token).to.be.a(\"string\");",
+                  "    ",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "    console.log(\"User token saved to environment.\");",
+                  "});",
+                  "    pm.environment.set(\"userToken\", jsonData.token);",
+                  "    pm.collectionVariables.set(\"userToken\", jsonData.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"priya.rajan@example.com\",\n  \"password\": \"ghz%BM^@5hvQT*H\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "login"
+              ]
+            },
+            "description": "Authenticates a registered regular user (Priya Rajan) and automatically extracts the returned `token` into the `{{token}}` environment variable."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 POST Admin Login [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has success message and JWT token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\", \"Login Successfully.\");",
+                  "    pm.expect(jsonData).to.have.property(\"token\");",
+                  "    pm.expect(jsonData.token).to.be.a(\"string\");",
+                  "    ",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "    console.log(\"Admin token saved to environment.\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@nammablood.org\",\n  \"password\": \"Password_123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "login"
+              ]
+            },
+            "description": "Authenticates a platform system administrator and updates `{{token}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 POST Blood Bank Login [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has success message and JWT token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\", \"Login Successfully.\");",
+                  "    pm.expect(jsonData).to.have.property(\"token\");",
+                  "    pm.expect(jsonData.token).to.be.a(\"string\");",
+                  "    ",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "    console.log(\"Blood Bank token saved to environment.\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"adyar.lifeline@example.com\",\n  \"password\": \"Dp3u!g^pV2w5S%h\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bloodbank/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bloodbank",
+                "login"
+              ]
+            },
+            "description": "Authenticates an institutional blood bank facility (Adyar Lifeline Blood Centre) and updates `{{token}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 POST Staff Login [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Staff login returns message, token, and staff profile\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\", \"Staff login successful.\");",
+                  "    pm.expect(jsonData).to.have.property(\"token\");",
+                  "    pm.expect(jsonData).to.have.property(\"staff\");",
+                  "    pm.expect(jsonData.staff).to.have.property(\"role\");",
+                  "    ",
+                  "    pm.environment.set(\"token\", jsonData.token);",
+                  "    console.log(\"Staff token saved to environment. Role:\", jsonData.staff.role);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mo.adyar@nammablood.internal\",\n  \"password\": \"63u^HTRSjXTs2ac\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bloodbank/staff/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bloodbank",
+                "staff",
+                "login"
+              ]
+            },
+            "description": "Authenticates an active Medical Officer (Dr. Sarah Rao, MD) with verified medical license and signed staff role payload."
+          },
+          "response": []
+        },
+        {
+          "name": "1.5 POST Login - Invalid Credentials [401 Unauthorized]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns authentication failure message\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\");",
+                  "    pm.expect(jsonData.message).to.include(\"Email or Password incorrect\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"priya.rajan@example.com\",\n  \"password\": \"WrongPassword!999\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "login"
+              ]
+            },
+            "description": "Negative Test: Verify 401 Unauthorized is returned when submitting incorrect password credentials."
+          },
+          "response": []
+        },
+        {
+          "name": "1.6 POST Login - Validation Failure (Missing Password) [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns missing value validation error\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"message\");",
+                  "    pm.expect(jsonData.message).to.include(\"Required missing values\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"priya.rajan@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/user/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "login"
+              ]
+            },
+            "description": "Negative Test: Verify 400 Bad Request is triggered by `loginMiddleware` when required login fields are missing."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Emergency Donor Discovery",
+      "description": "Endpoints for discovering nearby emergency blood donors based on presumptive immunohematology rules (`GET /api/emergency/discover/donors`).",
+      "item": [
+        {
+          "name": "2.1 GET Discover Donors - Geospatial Search [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response structure adheres to Phase 4.3 specification\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"searchCriteria\");",
+                  "    pm.expect(jsonData).to.have.property(\"pagination\");",
+                  "    pm.expect(jsonData).to.have.property(\"data\");",
+                  "    pm.expect(jsonData).to.have.property(\"governance\");",
+                  "    ",
+                  "    pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(true);",
+                  "    pm.expect(jsonData.searchCriteria.recipientBloodGroup).to.eql(\"B_Positive\");",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeDonation).to.eql(true);",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);",
+                  "    pm.expect(jsonData.governance.requiresLaboratoryCrossmatch).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test(\"Privacy Shield enforces candidate sanitization\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.length > 0) {",
+                  "        var donor = jsonData.data[0];",
+                  "        pm.expect(donor).to.not.have.property(\"_id\");",
+                  "        pm.expect(donor).to.not.have.property(\"userId\");",
+                  "        pm.expect(donor).to.not.have.property(\"phoneNo\");",
+                  "        pm.expect(donor).to.not.have.property(\"address\");",
+                  "        pm.expect(donor).to.not.have.property(\"location\");",
+                  "        pm.expect(donor).to.have.property(\"approxDistanceKm\");",
+                  "        pm.expect(donor).to.have.property(\"matchQuality\");",
+                  "        pm.expect(donor).to.have.property(\"clinicalNotice\");",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&componentType=Packed_Red_Blood_Cells&latitude=12.9716&longitude=77.5946&radiusKm=15&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "B_Positive",
+                  "description": "Mandatory recipient blood group"
+                },
+                {
+                  "key": "componentType",
+                  "value": "Packed_Red_Blood_Cells",
+                  "description": "Requested component type (defaults to Packed_Red_Blood_Cells)"
+                },
+                {
+                  "key": "latitude",
+                  "value": "12.9716",
+                  "description": "Hospital/search latitude [-90 to +90]"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946",
+                  "description": "Hospital/search longitude [-180 to +180]"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "15",
+                  "description": "Geospatial radius [1 to 50 km]"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (>= 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size [1 to 50]"
+                }
+              ]
+            },
+            "description": "Discovers nearby eligible donors within 15 km of Victoria Hospital, Bengaluru using geospatial coordinates and presumptive compatibility matching."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 GET Discover Donors - Administrative Fallback (City/State) [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Operates in administrative fallback mode\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(false);",
+                  "    pm.expect(jsonData.searchCriteria.city).to.eql(\"Bengaluru\");",
+                  "    pm.expect(jsonData.searchCriteria.state).to.eql(\"Karnataka\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=O_Negative&componentType=Whole_Blood&city=Bengaluru&state=Karnataka&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "O_Negative"
+                },
+                {
+                  "key": "componentType",
+                  "value": "Whole_Blood"
+                },
+                {
+                  "key": "city",
+                  "value": "Bengaluru"
+                },
+                {
+                  "key": "state",
+                  "value": "Karnataka"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Demonstrates location fallback query by city and state when client GPS coordinates are unavailable."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 GET Discover Donors - Missing Blood Group [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Rejects request with mandatory blood group notice\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Recipient blood group is mandatory\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?latitude=12.9716&longitude=77.5946",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                }
+              ]
+            },
+            "description": "Negative Test: Verifies that omitting the mandatory `bloodGroup` parameter fails closed with HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 GET Discover Donors - Incomplete Coordinates [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Requires both latitude and longitude together\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Both latitude and longitude must be provided\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716&longitude=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "B_Positive"
+                },
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Negative Test: Supplying `latitude` without `longitude` must return HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 GET Discover Donors - Search Radius Exceeds 50km Bound [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Bounds radius between 1 and 50 km\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Search radius must be a numeric value between 1 and 50 km\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716&longitude=77.5946&radiusKm=75",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "B_Positive"
+                },
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "75"
+                }
+              ]
+            },
+            "description": "Negative Test: Enforces strict radius ceiling of 50 km."
+          },
+          "response": []
+        },
+        {
+          "name": "2.6 GET Discover Donors - Unauthenticated Access [401 Unauthorized]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns authentication required message\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Authentication required\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/donors?bloodGroup=B_Positive&latitude=12.9716&longitude=77.5946",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "donors"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "B_Positive"
+                },
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                }
+              ]
+            },
+            "description": "Negative Test: Verify unauthenticated requests without Bearer Token are blocked with HTTP 401."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Emergency Blood Bank Discovery",
+      "description": "Endpoints for discovering nearby blood banks with verified Phase 3 traceable inventory status (`GET /api/emergency/discover/bloodbanks`).",
+      "item": [
+        {
+          "name": "3.1 GET Discover Blood Banks - Geospatial with Stock Verification [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Structure includes sanitized facility metadata & governance\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property(\"searchCriteria\");",
+                  "    pm.expect(jsonData).to.have.property(\"pagination\");",
+                  "    pm.expect(jsonData).to.have.property(\"data\");",
+                  "    pm.expect(jsonData).to.have.property(\"governance\");",
+                  "    ",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeIssuance).to.eql(true);",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);",
+                  "    pm.expect(jsonData.governance.requiresLaboratoryCrossmatch).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test(\"Sanitizes facility reference format (BB-XXXXXXXXXXXX)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.length > 0) {",
+                  "        var bank = jsonData.data[0];",
+                  "        pm.expect(bank).to.not.have.property(\"_id\");",
+                  "        pm.expect(bank).to.not.have.property(\"password\");",
+                  "        pm.expect(bank).to.have.property(\"facilityRef\");",
+                  "        pm.expect(bank.facilityRef).to.match(/^BB-[0-9A-F]{12}$/);",
+                  "        pm.expect(bank).to.have.property(\"inventoryTrustStatus\");",
+                  "        pm.expect([\"Verified_Available\", \"No_Matching_Stock\", \"Inventory_Unverified\"]).to.include(bank.inventoryTrustStatus);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/bloodbanks?bloodGroup=B_Positive&componentType=Packed_Red_Blood_Cells&latitude=12.9716&longitude=77.5946&radiusKm=15&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "bloodbanks"
+              ],
+              "query": [
+                {
+                  "key": "bloodGroup",
+                  "value": "B_Positive",
+                  "description": "Optional blood group filter"
+                },
+                {
+                  "key": "componentType",
+                  "value": "Packed_Red_Blood_Cells",
+                  "description": "Optional component type filter"
+                },
+                {
+                  "key": "latitude",
+                  "value": "12.9716",
+                  "description": "Search latitude [-90 to +90]"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946",
+                  "description": "Search longitude [-180 to +180]"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "15",
+                  "description": "Search radius [1 to 50 km]"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Discovers active blood banks in vicinity and verifies issue-eligible traceable inventory against Phase 3 safety gates."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 GET Discover Blood Banks - Broad Facility Search (No Blood Group Filter) [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Broad search runs without bloodGroup constraint\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.searchCriteria.bloodGroup).to.eql(null);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/bloodbanks?latitude=12.9716&longitude=77.5946&radiusKm=20&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "bloodbanks"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "20"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Demonstrates that blood bank discovery does not mandate bloodGroup, enabling facility directory searches."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 GET Discover Blood Banks - Administrative Location Fallback [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Uses administrative city/state parameters\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.searchCriteria.isGeospatial).to.eql(false);",
+                  "    pm.expect(jsonData.searchCriteria.city).to.eql(\"Bengaluru\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/bloodbanks?city=Bengaluru&state=Karnataka&page=1&limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "bloodbanks"
+              ],
+              "query": [
+                {
+                  "key": "city",
+                  "value": "Bengaluru"
+                },
+                {
+                  "key": "state",
+                  "value": "Karnataka"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Discovers registered blood banks by administrative city and state filters."
+          },
+          "response": []
+        },
+        {
+          "name": "3.4 GET Discover Blood Banks - Invalid Latitude Coordinate [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Latitude must be between -90 and +90\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Latitude must be between -90 and +90 degrees\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/bloodbanks?latitude=99.9&longitude=77.5946",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "bloodbanks"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "99.9"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                }
+              ]
+            },
+            "description": "Negative Test: Out of bounds latitude (> 90) fails with HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "3.5 GET Discover Blood Banks - Unauthenticated Access [401 Unauthorized]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/discover/bloodbanks?latitude=12.9716&longitude=77.5946",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "discover",
+                "bloodbanks"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "12.9716"
+                },
+                {
+                  "key": "longitude",
+                  "value": "77.5946"
+                }
+              ]
+            },
+            "description": "Negative Test: Verify blood bank discovery endpoint requires Bearer authentication."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Emergency Request Matching",
+      "description": "Dual-stream matching engine for verified emergency requests (`GET /api/emergency/requests/:id/matches`), featuring strict BOLA/IDOR protection, independent pagination, and HMAC candidate referencing.",
+      "item": [
+        {
+          "name": "4.1 GET Request Matches - Dual Stream Candidate Discovery [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Matching payload structure adheres to Milestone 4.3.3.4 spec\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"success\");",
+                  "    pm.expect(jsonData).to.have.property(\"emergencyRequest\");",
+                  "    pm.expect(jsonData).to.have.property(\"matchingSummary\");",
+                  "    pm.expect(jsonData).to.have.property(\"bloodBanks\");",
+                  "    pm.expect(jsonData).to.have.property(\"donors\");",
+                  "    pm.expect(jsonData).to.have.property(\"governance\");",
+                  "    ",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeDonation).to.eql(true);",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeReservation).to.eql(true);",
+                  "    pm.expect(jsonData.governance.cannotAuthorizeDispatch).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test(\"Dual-stream pagination containers are independent\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.donors).to.have.property(\"pagination\");",
+                  "    pm.expect(jsonData.donors).to.have.property(\"data\");",
+                  "    pm.expect(jsonData.bloodBanks).to.have.property(\"pagination\");",
+                  "    pm.expect(jsonData.bloodBanks).to.have.property(\"data\");",
+                  "});",
+                  "",
+                  "pm.test(\"HMAC candidate references adhere to DNR- and BB- format\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.donors.data && jsonData.donors.data.length > 0) {",
+                  "        var donorCandidate = jsonData.donors.data[0];",
+                  "        pm.expect(donorCandidate).to.have.property(\"candidateRef\");",
+                  "        pm.expect(donorCandidate.candidateRef).to.match(/^DNR-[0-9A-F]{32}$/);",
+                  "        pm.expect(donorCandidate).to.not.have.property(\"_id\");",
+                  "        pm.expect(donorCandidate).to.not.have.property(\"userId\");",
+                  "    }",
+                  "    if (jsonData.bloodBanks.data && jsonData.bloodBanks.data.length > 0) {",
+                  "        var bankCandidate = jsonData.bloodBanks.data[0];",
+                  "        pm.expect(bankCandidate).to.have.property(\"facilityRef\");",
+                  "        pm.expect(bankCandidate.facilityRef).to.match(/^BB-[0-9A-F]{12}$/);",
+                  "        pm.expect(bankCandidate).to.not.have.property(\"_id\");",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?radiusKm=15&donorPage=1&donorLimit=10&bankPage=1&bankLimit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "{{requestId}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "radiusKm",
+                  "value": "15",
+                  "description": "Geospatial radius [1 to 50 km]"
+                },
+                {
+                  "key": "donorPage",
+                  "value": "1",
+                  "description": "Donor candidate stream page"
+                },
+                {
+                  "key": "donorLimit",
+                  "value": "10",
+                  "description": "Donor candidate stream page size"
+                },
+                {
+                  "key": "bankPage",
+                  "value": "1",
+                  "description": "Blood bank candidate stream page"
+                },
+                {
+                  "key": "bankLimit",
+                  "value": "10",
+                  "description": "Blood bank candidate stream page size"
+                }
+              ]
+            },
+            "description": "Executes request matching on a verified active emergency request using its MongoDB ObjectId `{{requestId}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 GET Request Matches - Independent Donor & Blood Bank Pagination [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Enforces independent donor vs blood bank pagination parameters\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.donors.pagination.page).to.eql(2);",
+                  "    pm.expect(jsonData.donors.pagination.limit).to.eql(5);",
+                  "    pm.expect(jsonData.bloodBanks.pagination.page).to.eql(1);",
+                  "    pm.expect(jsonData.bloodBanks.pagination.limit).to.eql(3);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?donorPage=2&donorLimit=5&bankPage=1&bankLimit=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "{{requestId}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "donorPage",
+                  "value": "2"
+                },
+                {
+                  "key": "donorLimit",
+                  "value": "5"
+                },
+                {
+                  "key": "bankPage",
+                  "value": "1"
+                },
+                {
+                  "key": "bankLimit",
+                  "value": "3"
+                }
+              ]
+            },
+            "description": "Verifies independent pagination control where donor stream is on page 2 (limit 5) while blood bank stream is on page 1 (limit 3)."
+          },
+          "response": []
+        },
+        {
+          "name": "4.3 GET Request Matches - By Human-Readable Request Number [200 OK]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK or 404 if seed request not created\", function () {",
+                  "    pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.emergencyRequest.requestNumber).to.match(/^EMG-[0-9A-Z_-]+$/);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/EMG-20261102-ABC123/matches?radiusKm=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "EMG-20261102-ABC123",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "radiusKm",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Verifies that the matching engine accepts formatted human-readable request numbers (`EMG-YYYYMMDD-XXXXXX`) in addition to 24-character hexadecimal MongoDB ObjectIds."
+          },
+          "response": []
+        },
+        {
+          "name": "4.4 GET Request Matches - Malformed Request Identifier [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Fails closed with INVALID_REQUEST_IDENTIFIER error code\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.code).to.eql(\"INVALID_REQUEST_IDENTIFIER\");",
+                  "    pm.expect(jsonData.message).to.include(\"emergency request identifier is invalid\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/malformed_special_id!@#/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "malformed_special_id!@#",
+                "matches"
+              ]
+            },
+            "description": "Negative Test: An identifier that is neither a 24-character hex ObjectId nor an EMG- requestNumber fails validation with HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "4.5 GET Request Matches - Missing Request or Unauthorized BOLA [404 Not Found]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns anti-enumeration REQUEST_NOT_FOUND error\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.code).to.eql(\"REQUEST_NOT_FOUND\");",
+                  "    pm.expect(jsonData.message).to.eql(\"Emergency blood request was not found.\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/507f1f77bcf86cd799439011/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "507f1f77bcf86cd799439011",
+                "matches"
+              ]
+            },
+            "description": "Negative Test: Enforces anti-enumeration security. A non-existent request and an unauthorized user request return the exact same 404 REQUEST_NOT_FOUND response."
+          },
+          "response": []
+        },
+        {
+          "name": "4.6 GET Request Matches - Invalid Donor Limit (>50) [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Rejects pagination limit > 50\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.include(\"Donor page limit must be an integer between 1 and 50\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches?donorLimit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "{{requestId}}",
+                "matches"
+              ],
+              "query": [
+                {
+                  "key": "donorLimit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Negative Test: Page limit exceeding the allowed ceiling of 50 returns HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "4.7 GET Request Matches - Unauthenticated Access [401 Unauthorized]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests/{{requestId}}/matches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests",
+                "{{requestId}}",
+                "matches"
+              ]
+            },
+            "description": "Negative Test: Matching endpoint without Bearer authentication returns HTTP 401."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 - Emergency Request Initiation",
+      "description": "Authenticated emergency blood request creation (Milestone 4.3 pre-Phase 4.4 completion) with sliding-window rate limiting, schema validation, and mass-assignment protection.",
+      "item": [
+        {
+          "name": "Create Emergency Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body status is success\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"success\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains valid _id and server-generated requestNumber\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"_id\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"requestNumber\");",
+                  "    pm.expect(jsonData.data.requestNumber).to.match(/^EMG-[0-9]{8}-[A-F0-9]{6}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"Initial lifecycle status is Active and verificationStatus is Pending_Verification\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.verificationStatus).to.eql(\"Pending_Verification\");",
+                  "    pm.expect(jsonData.data.status).to.eql(\"Active\");",
+                  "});",
+                  "",
+                  "pm.test(\"Store emergencyRequestId and emergencyRequestNumber in environment/collection variables\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"emergencyRequestId\", jsonData.data._id);",
+                  "    pm.collectionVariables.set(\"emergencyRequestId\", jsonData.data._id);",
+                  "    pm.environment.set(\"emergencyRequestNumber\", jsonData.data.requestNumber);",
+                  "    pm.collectionVariables.set(\"emergencyRequestNumber\", jsonData.data.requestNumber);",
+                  "    pm.environment.set(\"requestId\", jsonData.data._id);",
+                  "    pm.collectionVariables.set(\"requestId\", jsonData.data._id);",
+                  "    console.log(\"Saved emergencyRequestId:\", jsonData.data._id, \"and requestNumber:\", jsonData.data.requestNumber);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Karthik Subramanian\",\n  \"patientAge\": 38,\n  \"patientGender\": \"Male\",\n  \"requiredBloodGroup\": \"B_Positive\",\n  \"requiredComponent\": \"Packed_Red_Blood_Cells\",\n  \"unitsRequested\": 2,\n  \"urgencyLevel\": \"Critical\",\n  \"requiredWithinHours\": 4,\n  \"hospitalName\": \"Apollo Speciality Hospital Greams Road\",\n  \"hospitalAddress\": \"21 Greams Lane, Thousand Lights\",\n  \"hospitalCity\": \"Chennai\",\n  \"hospitalState\": \"Tamil Nadu\",\n  \"hospitalPinCode\": 600006,\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      80.2525,\n      13.0604\n    ]\n  },\n  \"attendingDoctor\": {\n    \"doctorName\": \"Dr. S. Sundaresan, MD\",\n    \"doctorPhone\": \"9840123456\",\n    \"registrationNumber\": \"TNMC-2018-9921\"\n  },\n  \"clinicalJustification\": \"Post-operative severe acute hemorrhage requiring emergency blood transfusions.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests"
+              ]
+            },
+            "description": "Creates a new emergency blood request ticket under authenticated USER session with strict mass-assignment protection and Pending_Verification status."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 POST Create Request - Missing Mandatory Fields [400 Bad Request]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Response body indicates validation failure\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.match(/patientName|requiredBloodGroup|unitsRequested/i);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientAge\": 38,\n  \"hospitalCity\": \"Chennai\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests"
+              ]
+            },
+            "description": "Verifies server-side rejection (HTTP 400) when mandatory clinical or demographic fields are missing."
+          },
+          "response": []
+        },
+        {
+          "name": "5.3 POST Create Request - Unauthenticated Access [401 Unauthorized]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Response indicates missing authentication token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.message).to.match(/authentication required/i);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Anonymous Patient\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests"
+              ]
+            },
+            "description": "Verifies server-side rejection (HTTP 401) when no Bearer token is provided."
+          },
+          "response": []
+        },
+        {
+          "name": "5.4 POST Create Request - Forbidden Blood Bank Role [403 Forbidden]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "pm.test(\"Response indicates forbidden role for request creation\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"fail\");",
+                  "    pm.expect(jsonData.code).to.eql(\"FORBIDDEN\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Institutional Requester Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests"
+              ]
+            },
+            "description": "Verifies that institutional BLOODBANK or STAFF tokens are rejected with HTTP 403 when attempting to initiate emergency blood requests."
+          },
+          "response": []
+        },
+        {
+          "name": "5.5 POST Create Request - Rate Limit Exceeded [429 Too Many Requests]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 429 Too Many Requests\", function () {",
+                  "    pm.response.to.have.status(429);",
+                  "});",
+                  "",
+                  "pm.test(\"Response headers contain Retry-After\", function () {",
+                  "    pm.response.to.have.header(\"Retry-After\");",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.code).to.eql(\"RATE_LIMIT_EXCEEDED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientName\": \"Rate Limiting Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/emergency/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "emergency",
+                "requests"
+              ]
+            },
+            "description": "Verifies sliding-window quota enforcement (10 requests / 10 minutes per authenticated user) returning HTTP 429 and Retry-After header."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

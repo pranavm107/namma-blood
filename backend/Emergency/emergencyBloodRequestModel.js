@@ -9,6 +9,7 @@ const VALID_VERIFICATION_STATUSES = [
 	'Verified',
 	'Flagged_Suspicious',
 	'Rejected',
+	'More_Information_Required',
 ]
 const VALID_EMERGENCY_STATUSES = [
 	'Active',
@@ -61,6 +62,14 @@ const emergencyBloodRequestSchema = new mongoose.Schema(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: 'user',
 			required: [true, 'Requester user ID is required.'],
+			index: true,
+		},
+
+		// Associated Hospital Registry Reference (Optional for backward compatibility)
+		hospitalId: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'hospital',
+			default: null,
 			index: true,
 		},
 
@@ -217,6 +226,44 @@ const emergencyBloodRequestSchema = new mongoose.Schema(
 			required: true,
 			index: true,
 		},
+		verificationRequestedAt: {
+			type: Date,
+			default: Date.now,
+		},
+		verifiedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'user',
+			default: null,
+		},
+		verifiedAt: {
+			type: Date,
+			default: null,
+		},
+		verificationRemarks: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		rejectionReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		additionalInformationRequested: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		additionalInformationResponse: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		verificationVersion: {
+			type: Number,
+			default: 0,
+			min: [0, 'Verification version cannot be negative.'],
+		},
 
 		// Emergency Request Lifecycle
 		status: {
@@ -297,6 +344,7 @@ emergencyBloodRequestSchema.index({ location: '2dsphere' }, { sparse: true })
 emergencyBloodRequestSchema.index({ status: 1, requiredBloodGroup: 1, urgencyLevel: 1 })
 emergencyBloodRequestSchema.index({ requesterUserId: 1, createdAt: -1 })
 emergencyBloodRequestSchema.index({ hospitalCity: 1, hospitalState: 1 })
+emergencyBloodRequestSchema.index({ hospitalId: 1, verificationStatus: 1 })
 
 const EmergencyBloodRequest = mongoose.model('emergencybloodrequest', emergencyBloodRequestSchema)
 

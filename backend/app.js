@@ -16,6 +16,9 @@ const bloodUnitRoute = require('./BloodUnit/bloodUnitRoute')
 const contactusRoute = require('./ContactUs/contactUsRoute')
 const bulkImportRoute = require('./BulkImport/bulkImportRoute')
 const emergencyRoute = require('./Emergency/emergencyRoute')
+const hospitalRoute = require('./Hospital/hospitalRoute')
+const medicalOfficerRoute = require('./Hospital/medicalOfficerRoute')
+const invitationRoute = require('./Hospital/invitationRoute')
 
 const mongoose = require('mongoose')
 
@@ -49,6 +52,11 @@ app.use('/api/bloodstock', bloodStock)
 app.use('/api/bloodunit', bloodUnitRoute)
 app.use('/api/contactus', contactusRoute)
 app.use('/api/emergency', emergencyRoute)
+app.use('/api/hospitals', hospitalRoute)
+app.use('/api/hospital', hospitalRoute)
+app.use('/api/medical-officers', medicalOfficerRoute)
+app.use('/api/medical-officer', medicalOfficerRoute)
+app.use('/api/invitations', invitationRoute)
 
 app.use(globleErrorhandler)
 

@@ -429,8 +429,9 @@ describe('Stage B3.1: Hospital Representative Invitation Issuance & Acceptance',
 			const rawToken = crypto.randomBytes(32).toString('hex')
 			const encrypted = encryptInvitationToken(rawToken)
 
-			// Tamper with encryptedData
-			const tampered = { ...encrypted, encryptedData: 'a' + encrypted.encryptedData.slice(1) }
+			// Tamper with encryptedData (guaranteed byte flip)
+			const flippedFirstChar = encrypted.encryptedData[0] === 'a' ? 'b' : 'a'
+			const tampered = { ...encrypted, encryptedData: flippedFirstChar + encrypted.encryptedData.slice(1) }
 			assert.throws(() => decryptInvitationToken(tampered))
 		})
 
@@ -438,8 +439,9 @@ describe('Stage B3.1: Hospital Representative Invitation Issuance & Acceptance',
 			const rawToken = crypto.randomBytes(32).toString('hex')
 			const encrypted = encryptInvitationToken(rawToken)
 
-			// Tamper with tag
-			const tampered = { ...encrypted, tag: '00' + encrypted.tag.slice(2) }
+			// Tamper with tag (guaranteed byte flip)
+			const flippedFirstChar = encrypted.tag[0] === 'a' ? 'b' : 'a'
+			const tampered = { ...encrypted, tag: flippedFirstChar + encrypted.tag.slice(1) }
 			assert.throws(() => decryptInvitationToken(tampered))
 		})
 	})

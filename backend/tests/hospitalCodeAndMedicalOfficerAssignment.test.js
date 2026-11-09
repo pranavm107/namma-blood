@@ -393,7 +393,7 @@ describe('Hospital Code Concurrency, Registration Validation & MO Onboarding Lif
 			assert.strictEqual(res.jsonData?.field, 'medicalRegistrationNumber')
 		})
 
-		it('should strictly BLOCK unverified Medical Officer from logging in (HTTP 403)', async () => {
+		it('should ALLOW unverified active Medical Officer to authenticate into ONBOARDING session (HTTP 200)', async () => {
 			const { req, res } = createMockReqRes({
 				model: userModel,
 				body: {
@@ -403,8 +403,8 @@ describe('Hospital Code Concurrency, Registration Validation & MO Onboarding Lif
 			})
 
 			await login(req, res, () => {})
-			assert.strictEqual(res.statusCode, 403)
-			assert.match(res.jsonData?.message, /pending administrative verification/i)
+			assert.strictEqual(res.statusCode, 200)
+			assert.strictEqual(res.jsonData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should strictly BLOCK unverified Medical Officer from clinical verification operations via middleware (HTTP 403)', async () => {

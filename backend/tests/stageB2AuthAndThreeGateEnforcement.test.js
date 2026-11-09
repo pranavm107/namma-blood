@@ -475,14 +475,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /credentials are suspended/i)
 
-			// Also test login endpoint rejects
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /account is suspended/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should REJECT Medical Officer when credentialStatus is Rejected even if legacy verificationStatus is Verified (precedence, HTTP 403)', async () => {
@@ -509,14 +509,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /credentials were rejected/i)
 
-			// Also test login endpoint rejects
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /verification was rejected/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should REJECT Medical Officer when credentialStatus is Pending_Verification even if legacy verificationStatus is Verified (precedence, HTTP 403)', async () => {
@@ -543,14 +543,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /pending administrative verification/i)
 
-			// Also test login endpoint rejects
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /pending administrative verification/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should REJECT Medical Officer when credentialStatus and verificationStatus are both MISSING (HTTP 403)', async () => {
@@ -580,14 +580,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /credential status is missing/i)
 
-			// Also test login endpoint rejects
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /credential status is missing/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should ALLOW legacy Medical Officer when credentialStatus is genuinely ABSENT but verificationStatus is Verified (scoped legacy fallback)', async () => {
@@ -667,14 +667,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /malformed or invalid/i)
 
-			// Also test login endpoint rejects
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /malformed or invalid|Verified credentials required/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should strictly REJECT Medical Officer when credentialStatus is explicit NULL even if legacy verificationStatus is Verified (null is not absent, HTTP 403)', async () => {
@@ -704,14 +704,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /invalid \(null\)/i)
 
-			// Login endpoint must also reject
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /invalid \(null\)/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should strictly REJECT Medical Officer when credentialStatus is empty string even if legacy verificationStatus is Verified (empty string is not absent, HTTP 403)', async () => {
@@ -741,14 +741,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /invalid \(empty\)/i)
 
-			// Login endpoint must also reject
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /invalid \(empty\)/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 
 		it('should REJECT Medical Officer when credentialStatus is Unsubmitted even if legacy verificationStatus is Verified (precedence, HTTP 403)', async () => {
@@ -775,13 +775,14 @@ describe('Stage B2: Core Authentication, Authorization Middleware & Three-Gate E
 			assert.strictEqual(res.statusCode, 403)
 			assert.match(res.responseData?.message, /credentials have not been submitted/i)
 
+			// Stage B3.4 Decoupled Auth: Active account authenticates into ONBOARDING session
 			const loginMock = createMockReqRes({
 				model: userModel,
 				body: { email: doc.email, password: 'Password123!' },
 			})
 			await login(loginMock.req, loginMock.res, () => {})
-			assert.strictEqual(loginMock.res.statusCode, 403)
-			assert.match(loginMock.res.responseData?.message, /credentials have not been submitted/i)
+			assert.strictEqual(loginMock.res.statusCode, 200)
+			assert.strictEqual(loginMock.res.responseData?.sessionScope, 'ONBOARDING')
 		})
 	})
 

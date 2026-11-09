@@ -1336,7 +1336,7 @@ describe('Stage B3.2: Doctor Nomination & Invitation Acceptance', () => {
 			createdEmergencyRequestIds.push(emergencyRequestAtHospital1._id)
 		})
 
-		it('should REJECT the accepted unverified Medical Officer from login until credentials are verified (HTTP 403)', async () => {
+		it('should ALLOW the accepted unverified Medical Officer to login with sessionScope: ONBOARDING (HTTP 200, B3.4 decoupled auth)', async () => {
 			const { req, res } = createMockReqRes({
 				model: userModel,
 				body: {
@@ -1346,8 +1346,9 @@ describe('Stage B3.2: Doctor Nomination & Invitation Acceptance', () => {
 			})
 
 			await login(req, res, () => {})
-			assert.strictEqual(res.statusCode, 403)
-			assert.match(res.responseData?.message, /credentials have not been submitted/i)
+			assert.strictEqual(res.statusCode, 200)
+			assert.strictEqual(res.responseData?.sessionScope, 'ONBOARDING')
+			assert.ok(res.responseData?.token)
 		})
 
 		it('should ALLOW an existing Verified Medical Officer to log in via standard login (Gate 1 & Gate 2 pass, HTTP 200)', async () => {

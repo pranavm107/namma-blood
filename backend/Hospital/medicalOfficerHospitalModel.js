@@ -109,6 +109,68 @@ const medicalOfficerHospitalSchema = new mongoose.Schema(
 			trim: true,
 			default: '',
 		},
+		rejectedAt: {
+			type: Date,
+			default: null,
+		},
+		rejectedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			default: null,
+		},
+		approvalReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		suspensionReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		suspendedAt: {
+			type: Date,
+			default: null,
+		},
+		suspendedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			default: null,
+		},
+		suspendedByRole: {
+			type: String,
+			enum: ['ADMIN', 'HOSPITAL_ADMIN', null],
+			default: null,
+		},
+		revocationReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		revokedAt: {
+			type: Date,
+			default: null,
+		},
+		revokedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			default: null,
+		},
+		revokedByRole: {
+			type: String,
+			enum: ['ADMIN', 'HOSPITAL_ADMIN', null],
+			default: null,
+		},
+		reactivationReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		reactivatedAt: {
+			type: Date,
+			default: null,
+		},
+		reactivatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			default: null,
+		},
 		effectiveFrom: {
 			type: Date,
 			default: Date.now,

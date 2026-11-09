@@ -136,6 +136,56 @@ const schema = new mongoose.Schema(
 			trim: true,
 			default: '',
 		},
+		// Medical Officer Credential Review & Clarification Tracking (Stage B3.4)
+		credentialClarificationRequested: {
+			type: Boolean,
+			default: false,
+		},
+		credentialClarificationNotes: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		credentialClarificationRequestedAt: {
+			type: Date,
+			default: null,
+		},
+		credentialClarificationRequestedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'admin',
+			default: null,
+		},
+		credentialResubmissionCount: {
+			type: Number,
+			default: 0,
+		},
+		credentialLastSubmittedAt: {
+			type: Date,
+			default: null,
+		},
+		credentialReviewStartedAt: {
+			type: Date,
+			default: null,
+		},
+		credentialReviewStartedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'admin',
+			default: null,
+		},
+		credentialSuspendedAt: {
+			type: Date,
+			default: null,
+		},
+		credentialSuspendedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'admin',
+			default: null,
+		},
+		credentialSuspensionReason: {
+			type: String,
+			trim: true,
+			default: '',
+		},
 		// Hospital Representative Fields
 		hospitalId: {
 			type: mongoose.Schema.Types.ObjectId,
@@ -163,6 +213,10 @@ const schema = new mongoose.Schema(
 			type: String,
 			trim: true,
 			default: '',
+		},
+		registrationYear: {
+			type: Number,
+			default: null,
 		},
 		qualification: {
 			type: String,

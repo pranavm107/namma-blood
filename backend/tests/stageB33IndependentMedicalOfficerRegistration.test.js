@@ -830,7 +830,7 @@ describe('Stage B3.3: Independent Medical Officer Self-Registration', () => {
 			createdUserIds.push(registeredDoc.id)
 		})
 
-		it('Scenario 22: Newly registered Medical Officer authentication enforces approved lifecycle (Gate 2 fails closed: credentials unsubmitted, HTTP 403)', async () => {
+		it('Scenario 22: Newly registered Medical Officer authentication enforces approved lifecycle (Gate 1 Active, receives ONBOARDING session; clinical endpoints fail closed)', async () => {
 			const { req, res } = createMockReqRes({
 				model: userModel,
 				body: {
@@ -840,9 +840,10 @@ describe('Stage B3.3: Independent Medical Officer Self-Registration', () => {
 			})
 
 			await login(req, res, () => {})
-			// Enforces Gate 2: cannot log in with Unsubmitted credentials
-			assert.strictEqual(res.statusCode, 403)
-			assert.match(res.responseData?.message, /credentials have not been submitted/i)
+			// Stage B3.4: Active doctor can authenticate to access onboarding, receiving sessionScope: ONBOARDING
+			assert.strictEqual(res.statusCode, 200)
+			assert.strictEqual(res.responseData?.sessionScope, 'ONBOARDING')
+			assert.ok(res.responseData?.token)
 		})
 
 		it('Scenario 23: Invalid credentials (wrong password) are rejected with HTTP 401', async () => {

@@ -7,12 +7,37 @@ const express = require('express')
 const router = express.Router()
 
 const { protectMedicalOfficerAuth } = require('./medicalOfficerMiddleware')
+const { protectMedicalOfficerOnboarding } = require('./medicalOfficerOnboardingMiddleware')
 const medicalOfficerController = require('./medicalOfficerController')
+const medicalOfficerCredentialController = require('./medicalOfficerCredentialController')
 
 // Public Independent Medical Officer Self-Registration (Stage B3.3)
 // POST /api/medical-officers/register & POST /api/medical-officer/register
 router.post('/register', medicalOfficerController.registerMedicalOfficer)
 
+// =========================================================================
+// Credential Onboarding & Management Endpoints (Stage B3.4.2)
+// Accessible by Active Medical Officers in Onboarding scope
+// =========================================================================
+router.post(
+	'/credentials/submit',
+	protectMedicalOfficerOnboarding,
+	medicalOfficerCredentialController.submitCredentials
+)
+router.get(
+	'/credentials/status',
+	protectMedicalOfficerOnboarding,
+	medicalOfficerCredentialController.getCredentialStatus
+)
+router.patch(
+	'/credentials/resubmit',
+	protectMedicalOfficerOnboarding,
+	medicalOfficerCredentialController.resubmitCredentials
+)
+
+// =========================================================================
+// Clinical Operations Endpoints (Protected by Three-Gate Authorization)
+// =========================================================================
 // Enforce Medical Officer authentication, three-gate validation, and multi-tenancy across all routes
 router.use(protectMedicalOfficerAuth('VIEW_EMERGENCY_REQUESTS'))
 

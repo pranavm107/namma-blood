@@ -10,6 +10,7 @@ const { protectEmergencyAuth } = require('../Emergency/emergencyAuthMiddleware')
 const { protectHospitalAdminAuth } = require('./hospitalAdminMiddleware')
 const hospitalController = require('./hospitalController')
 const { nominateDoctorInvitation } = require('./hospitalInvitationController')
+const hospitalAssociationApprovalController = require('./hospitalAssociationApprovalController')
 
 // Admin authorization guard
 const requireAdmin = (req, res, next) => {
@@ -74,12 +75,85 @@ router.post(
 	requireAdmin,
 	hospitalController.assignMedicalOfficer
 )
-router.get(
+// Stage B3.4.4: Hospital Representative Medical Officer Association Endpoints
+// (Protected strictly by protectHospitalAdminAuth for tenant isolation)
+const hospitalAssocPaths = [
 	'/medical-officers/associations',
-	protectEmergencyAuth,
-	requireAdmin,
-	hospitalController.getAssociations
+	'/medical-officer/associations',
+]
+const hospitalAssocDetailPaths = [
+	'/medical-officers/:doctorId/associations/:associationId',
+	'/medical-officer/:doctorId/associations/:associationId',
+]
+const hospitalAssocSuspendPaths = [
+	'/medical-officers/:doctorId/associations/:associationId/suspend',
+	'/medical-officer/:doctorId/associations/:associationId/suspend',
+]
+const hospitalAssocRevokePaths = [
+	'/medical-officers/:doctorId/associations/:associationId/revoke',
+	'/medical-officer/:doctorId/associations/:associationId/revoke',
+]
+
+// Hospital Representative queries (read-only list & detail)
+router.get(
+	hospitalAssocPaths,
+	protectHospitalAdminAuth,
+	hospitalAssociationApprovalController.getHospitalAssociations
 )
+router.get(
+	hospitalAssocDetailPaths,
+	protectHospitalAdminAuth,
+	hospitalAssociationApprovalController.getHospitalAssociationDetails
+)
+
+// Hospital Representative actions (suspend & revoke)
+router.patch(
+	hospitalAssocSuspendPaths,
+	protectHospitalAdminAuth,
+	hospitalAssociationApprovalController.suspendHospitalAssociationByHospital
+)
+router.patch(
+	hospitalAssocRevokePaths,
+	protectHospitalAdminAuth,
+	hospitalAssociationApprovalController.revokeHospitalAssociationByHospital
+)
+
+// Explicit Denials for Hospital Representatives (Stage B3.4.4 Security Invariants)
+const hospitalAssocApprovePaths = [
+	'/medical-officers/:doctorId/associations/:associationId/approve',
+	'/medical-officer/:doctorId/associations/:associationId/approve',
+]
+const hospitalAssocReactivatePaths = [
+	'/medical-officers/:doctorId/associations/:associationId/reactivate',
+	'/medical-officer/:doctorId/associations/:associationId/reactivate',
+]
+const hospitalAssocPermissionPaths = [
+	'/medical-officers/:doctorId/associations/:associationId/permissions',
+	'/medical-officer/:doctorId/associations/:associationId/permissions',
+]
+
+router.patch(hospitalAssocApprovePaths, protectHospitalAdminAuth, (req, res) => {
+	return res.status(403).json({
+		status: 'fail',
+		message: 'Access denied: Hospital Representatives cannot approve associations. Platform Administrator approval is required.',
+	})
+})
+
+router.patch(hospitalAssocReactivatePaths, protectHospitalAdminAuth, (req, res) => {
+	return res.status(403).json({
+		status: 'fail',
+		message: 'Access denied: Hospital Representatives cannot reactivate suspended associations. Platform Administrator approval is required.',
+	})
+})
+
+router.patch(hospitalAssocPermissionPaths, protectHospitalAdminAuth, (req, res) => {
+	return res.status(403).json({
+		status: 'fail',
+		message: 'Access denied: Hospital Representatives cannot modify association clinical permissions. Platform Administrator authorization is required.',
+	})
+})
+
+// Legacy Admin route fallback for backward compatibility
 router.patch(
 	'/medical-officers/association/:id/status',
 	protectEmergencyAuth,

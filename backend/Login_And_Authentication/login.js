@@ -109,78 +109,11 @@ const login = catchAsync(async (req, res) => {
 			})
 		}
 
-		// Gate 2: Credential Status Precedence (Strict Security Matrix)
-		const credStatus = user.credentialStatus
-
-		if (credStatus === 'Verified') {
-			// Passes Gate 2 unconditionally
-		} else if (credStatus === 'Suspended') {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer account is suspended.',
-			})
-		} else if (credStatus === 'Rejected') {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer account verification was rejected.',
-			})
-		} else if (credStatus === 'Pending_Verification' || credStatus === 'Under_Review') {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer account is pending administrative verification.',
-			})
-		} else if (credStatus === 'Unsubmitted') {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer professional credentials have not been submitted.',
-			})
-		} else if (credStatus === null) {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer credential status is invalid (null). Verified credentials required.',
-			})
-		} else if (typeof credStatus === 'string' && credStatus.trim() === '') {
-			return res.status(403).json({
-				status: 'fail',
-				message: 'Medical Officer credential status is invalid (empty). Verified credentials required.',
-			})
-		} else if (credStatus !== undefined) {
-			return res.status(403).json({
-				status: 'fail',
-				message: `Medical Officer credential status is malformed or invalid ('${credStatus}'). Verified credentials required.`,
-			})
-		} else {
-			// credStatus === undefined (genuinely absent from legacy database record)
-			const legacyStatus = user.verificationStatus
-			if (legacyStatus === 'Verified') {
-				// Scoped legacy compatibility pass permitted
-			} else if (!legacyStatus || typeof legacyStatus !== 'string' || legacyStatus.trim() === '') {
-				return res.status(403).json({
-					status: 'fail',
-					message: 'Medical Officer credential status is missing. Administrative verification required.',
-				})
-			} else if (legacyStatus === 'Pending') {
-				return res.status(403).json({
-					status: 'fail',
-					message: 'Medical Officer account is pending administrative verification.',
-				})
-			} else if (legacyStatus === 'Rejected') {
-				return res.status(403).json({
-					status: 'fail',
-					message: 'Medical Officer account verification was rejected.',
-				})
-			} else if (legacyStatus === 'Suspended') {
-				return res.status(403).json({
-					status: 'fail',
-					message: 'Medical Officer account is suspended.',
-				})
-			} else {
-				return res.status(403).json({
-					status: 'fail',
-					message: `Medical Officer verification status is '${legacyStatus}'. Verified status required.`,
-				})
-			}
-		}
+		// Gate 1 Active Check Passed:
+		// Stage B3.4 Decoupling: Authentication validates identity and Gate 1 (Active account).
+		// Gate 2 (Professional Credentials) and Gate 3 (Hospital Association) are enforced
+		// strictly by route middleware (protectMedicalOfficerAuth) on clinical endpoints.
+		// Active Medical Officers can authenticate to access onboarding and credential workflows.
 	}
 
 	// Hospital Representative Lifecycle Authentication Guard
@@ -202,10 +135,18 @@ const login = catchAsync(async (req, res) => {
 
 	const token = tokenGenerate(user._id, user.tokenVersion)
 
+	const sessionScope =
+		user.role === 'MEDICAL_OFFICER'
+			? user.credentialStatus === 'Verified'
+				? 'CLINICAL'
+				: 'ONBOARDING'
+			: undefined
+
 	return res.status(200).json({
 		message: 'Login Successfully.',
 		token,
 		role: user.role,
+		...(sessionScope ? { sessionScope } : {}),
 		user: {
 			_id: user._id,
 			firstName: user.firstName,
